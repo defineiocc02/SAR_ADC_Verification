@@ -91,7 +91,7 @@ function run_algorithm_comparison()
     N_prime = 127;
     f_in = N_prime / cfg.N_FFT * cfg.ADC.Fs;
     t = (0:cfg.N_FFT-1) / cfg.ADC.Fs;
-    A_in = cfg.ADC.V_ref * 0.95;
+    A_in = cfg.ADC.V_ref * 0.99;
     V_in = A_in * sin(2 * pi * f_in * t);
     
     kTC_array = kTC_noise * randn(1, cfg.N_FFT);
@@ -115,7 +115,7 @@ function run_algorithm_comparison()
         
         V_res_LSB = V_res_dynamic / V_LSB;
         
-        [psd_raw, freq_raw] = compute_fft_psd(double(D_raw), cfg.ADC.Fs);
+        [psd_raw, freq_raw] = compute_fft_psd(double(D_raw), cfg.ADC.Fs, cfg.ADC.N_bits);
         sndr_raw = compute_sndr_from_psd(psd_raw, freq_raw, f_in);
         results.sndr_raw(i_sigma) = sndr_raw;
         
@@ -126,34 +126,36 @@ function run_algorithm_comparison()
             
             RW_drift = randn(cfg.N_pts, N_red) * (sigma_th * 0.3);
             
-            [est_mle, ~, ~, ~] = run_mle(V_res_LSB, N_red, sigma_th, LUT_MLE(1:N_red+1), RW_drift);
-            D_mle = D_raw + int32(round(est_mle));
+            sig_th = sigma_th;
             
-            [est_be, ~, ~, ~] = run_be(V_res_LSB, N_red, sigma_th, LUT_BE(1:N_red+1), RW_drift);
-            D_be = D_raw + int32(round(est_be));
+            [est_mle, ~, ~, ~] = run_mle(V_res_LSB, N_red, sig_th, LUT_MLE(1:N_red+1), RW_drift);
+            D_mle = double(D_raw) + est_mle;
             
-            [est_dlr, ~, ~, ~] = run_dlr(V_res_LSB, N_red, sigma_th, RW_drift);
-            D_dlr = D_raw + int32(round(est_dlr));
+            [est_be, ~, ~, ~] = run_be(V_res_LSB, N_red, sig_th, LUT_BE(1:N_red+1), RW_drift);
+            D_be = double(D_raw) + est_be;
             
-            [est_ata, ~, ~, ~] = run_ata(V_res_LSB, N_red, sigma_th, RW_drift);
-            D_ata = D_raw + int32(round(est_ata));
+            [est_dlr, ~, ~] = run_dlr(V_res_LSB, N_red, sig_th, RW_drift);
+            D_dlr = double(D_raw) + est_dlr;
             
-            [est_ala, ~, ~, ~] = run_ala(V_res_LSB, N_red, sigma_th, RW_drift);
-            D_ala = D_raw + int32(round(est_ala));
+            [est_ata, ~, ~, ~] = run_ata(V_res_LSB, N_red, sig_th, RW_drift);
+            D_ata = double(D_raw) + est_ata;
             
-            [psd_mle, ~] = compute_fft_psd(double(D_mle), cfg.Fs);
+            [est_ala, ~, ~, ~] = run_ala(V_res_LSB, N_red, sig_th, RW_drift);
+            D_ala = double(D_raw) + est_ala;
+            
+            [psd_mle, ~] = compute_fft_psd(D_mle, cfg.ADC.Fs, cfg.ADC.N_bits);
             results.sndr_fft(1, i_N, i_sigma) = compute_sndr_from_psd(psd_mle, freq_raw, f_in);
             
-            [psd_be, ~] = compute_fft_psd(double(D_be), cfg.Fs);
+            [psd_be, ~] = compute_fft_psd(D_be, cfg.ADC.Fs, cfg.ADC.N_bits);    
             results.sndr_fft(2, i_N, i_sigma) = compute_sndr_from_psd(psd_be, freq_raw, f_in);
             
-            [psd_dlr, ~] = compute_fft_psd(double(D_dlr), cfg.Fs);
+            [psd_dlr, ~] = compute_fft_psd(D_dlr, cfg.ADC.Fs, cfg.ADC.N_bits);
             results.sndr_fft(3, i_N, i_sigma) = compute_sndr_from_psd(psd_dlr, freq_raw, f_in);
             
-            [psd_ata, ~] = compute_fft_psd(double(D_ata), cfg.Fs);
+            [psd_ata, ~] = compute_fft_psd(D_ata, cfg.ADC.Fs, cfg.ADC.N_bits);
             results.sndr_fft(4, i_N, i_sigma) = compute_sndr_from_psd(psd_ata, freq_raw, f_in);
             
-            [psd_ala, ~] = compute_fft_psd(double(D_ala), cfg.Fs);
+            [psd_ala, ~] = compute_fft_psd(D_ala, cfg.ADC.Fs, cfg.ADC.N_bits);
             results.sndr_fft(5, i_N, i_sigma) = compute_sndr_from_psd(psd_ala, freq_raw, f_in);
         end
         
@@ -173,11 +175,11 @@ function run_algorithm_comparison()
     [D_raw_typ, V_res_typ] = run_dynamic_sar_quantization(V_in_noisy, cfg.ADC, sigma_typ);
     V_res_typ_LSB = V_res_typ / V_LSB;
     RW_drift_typ = randn(cfg.N_pts, N_red_typ) * (sigma_typ * 0.3);
-    [est_ala_typ, ~, ~, ~] = run_ala(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_MLE(1:N_red_typ+1), RW_drift_typ);
-    D_ala_typ = D_raw_typ + int32(round(est_ala_typ));
+    [est_ala_typ, ~, ~, ~] = run_ala(V_res_typ_LSB, N_red_typ, sigma_typ, RW_drift_typ);
+    D_ala_typ = double(D_raw_typ) + est_ala_typ;
     
-    [psd_raw_typ, freq_typ] = compute_fft_psd(double(D_raw_typ), cfg.Fs);
-    [psd_ala_typ, ~] = compute_fft_psd(double(D_ala_typ), cfg.Fs);
+    [psd_raw_typ, freq_typ] = compute_fft_psd(double(D_raw_typ), cfg.ADC.Fs, cfg.ADC.N_bits);
+    [psd_ala_typ, ~] = compute_fft_psd(D_ala_typ, cfg.ADC.Fs, cfg.ADC.N_bits);  
     
     sndr_raw_typ = results.sndr_raw(i_sigma_typ);
     sndr_ala_typ = results.sndr_fft(5, i_N_typ, i_sigma_typ);
@@ -188,7 +190,7 @@ function run_algorithm_comparison()
     fprintf('\n>>> [5/6] 生成可视化图表...\n');
     
     color_raw = [0.2, 0.2, 0.2];
-    color_ala = [0.8, 0, 0];
+    color_ala = [0.85, 0.1, 0.1];
     color_ata = [0, 0, 0.8];
     color_dlr = [0, 0.6, 0];
     color_mle = [0.5, 0.5, 0.5];
@@ -209,13 +211,13 @@ function run_algorithm_comparison()
     
     yline(SNDR_Thermal_Limit, 'r--', 'LineWidth', 2.5, 'DisplayName', sprintf('Thermal Limit (%.1f dB)', SNDR_Thermal_Limit));
     
-    plot(cfg.scan.sigma_range, results.sndr_raw, 'k--', 'LineWidth', 2, 'DisplayName', 'Raw SAR');
+    plot(cfg.scan.sigma_range, results.sndr_raw, 'k--', 'LineWidth', 2.5, 'DisplayName', 'Raw SAR');
     
-    plot(cfg.scan.sigma_range, results.sndr(1,:), 's--', 'Color', color_mle, 'LineWidth', 1.5, 'MarkerSize', 8, 'DisplayName', 'MLE (LUT@0.6)');
-    plot(cfg.scan.sigma_range, results.sndr(2,:), 'v--', 'Color', color_be, 'LineWidth', 1.5, 'MarkerSize', 7, 'DisplayName', 'BE (LUT@0.6)');
-    plot(cfg.scan.sigma_range, results.sndr(3,:), '^-', 'Color', color_dlr, 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'DLR');
-    plot(cfg.scan.sigma_range, results.sndr(4,:), 's-', 'Color', color_ata, 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 'ATA v5.0');
-    plot(cfg.scan.sigma_range, results.sndr(5,:), 'o-', 'Color', color_ala, 'LineWidth', 2.5, 'MarkerSize', 9, 'DisplayName', 'ALA v3.0');
+    plot(cfg.scan.sigma_range, results.sndr(1,:), 's--', 'Color', color_mle, 'LineWidth', 2.5, 'MarkerSize', 10, 'DisplayName', 'MLE (LUT@0.6)');
+    plot(cfg.scan.sigma_range, results.sndr(2,:), 'v--', 'Color', color_be, 'LineWidth', 2.5, 'MarkerSize', 10, 'DisplayName', 'BE (LUT@0.6)');
+    plot(cfg.scan.sigma_range, results.sndr(3,:), '^-', 'Color', color_dlr, 'LineWidth', 2.5, 'MarkerSize', 10, 'DisplayName', 'DLR');
+    plot(cfg.scan.sigma_range, results.sndr(4,:), 's-', 'Color', color_ata, 'LineWidth', 2.5, 'MarkerSize', 10, 'DisplayName', 'ATA v5.0');
+    plot(cfg.scan.sigma_range, results.sndr(5,:), 'o-', 'Color', color_ala, 'LineWidth', 2.5, 'MarkerSize', 10, 'MarkerFaceColor', color_ala, 'DisplayName', 'ALA v3.0');
     
     hold off;
     xlabel('$\sigma_n$ (LSB)', 'Interpreter', 'latex', 'FontSize', fs_axis);
@@ -223,7 +225,8 @@ function run_algorithm_comparison()
     title('PVT Robustness Test: Dynamic SNDR vs Comparator Noise', 'FontSize', fs_title, 'Interpreter', 'latex');
     legend('Location', 'best', 'FontSize', fs_legend);
     grid on;
-    set(gca, 'FontSize', fs_axis-2);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', fs_axis-2, 'TickLabelInterpreter', 'latex');
+    set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);
     box on;
     ylim([60, 100]);
     
@@ -237,15 +240,15 @@ function run_algorithm_comparison()
     figure('Position', [100, 100, 1000, 700]);
     hold on;
     
-    plot(freq_typ/1e3, 10*log10(psd_raw_typ), 'k-', 'LineWidth', 1.5, 'DisplayName', sprintf('Raw (SNDR=%.1f dB)', sndr_raw_typ));
-    plot(freq_typ/1e3, 10*log10(psd_ala_typ), 'r-', 'LineWidth', 2.5, 'DisplayName', sprintf('ALA (SNDR=%.1f dB)', sndr_ala_typ));
+    semilogx(freq_typ/1e3, psd_raw_typ, 'k-', 'LineWidth', 1.0, 'DisplayName', sprintf('Raw (SNDR=%.1f dB)', sndr_raw_typ));
+    semilogx(freq_typ/1e3, psd_ala_typ, 'r-', 'LineWidth', 1.5, 'DisplayName', sprintf('ALA (SNDR=%.1f dB)', sndr_ala_typ));
     
     [~, idx_fund] = min(abs(freq_typ - f_in));
-    fund_power_raw = psd_raw_typ(idx_fund);
-    fund_power_ala = psd_ala_typ(idx_fund);
+    fund_power_raw = 10^(psd_raw_typ(idx_fund)/10);
+    fund_power_ala = 10^(psd_ala_typ(idx_fund)/10);
     
-    noise_floor_raw = mean(psd_raw_typ(end-100:end));
-    noise_floor_ala = mean(psd_ala_typ(end-100:end));
+    noise_floor_raw = mean(10.^(psd_raw_typ(end-100:end)/10));
+    noise_floor_ala = mean(10.^(psd_ala_typ(end-100:end)/10));
     floor_improvement = 10*log10(noise_floor_raw/noise_floor_ala);
     
     xline(f_in/1e3, 'g:', 'LineWidth', 1.5, 'DisplayName', sprintf('f_{in}=%.2f kHz', f_in/1e3));
@@ -256,10 +259,11 @@ function run_algorithm_comparison()
     title(sprintf('FFT Spectrum: $\\sigma_n=%.2f$ LSB, $N_{red}=%d$', sigma_typ, N_red_typ), 'FontSize', fs_title, 'Interpreter', 'latex');
     legend('Location', 'best', 'FontSize', fs_legend);
     grid on;
-    set(gca, 'FontSize', fs_axis-2);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', fs_axis-2, 'TickLabelInterpreter', 'latex');
+    set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);
     box on;
-    xlim([0, cfg.Fs/2e3]);
-    ylim([-160, 0]);
+    xlim([0.1, cfg.ADC.Fs/2e3]);
+    ylim([-150, 0]);
     
     annotation('textbox', [0.6, 0.75, 0.25, 0.1], 'String', sprintf('Noise Floor\\Delta = +%.1f dB', floor_improvement), ...
         'FontSize', 12, 'Interpreter', 'latex', 'EdgeColor', 'k', 'FaceAlpha', 0.9);
@@ -279,16 +283,21 @@ function run_algorithm_comparison()
     yline(SNDR_Thermal_Limit, 'r--', 'LineWidth', 2.5, 'DisplayName', sprintf('Thermal Limit (%.1f dB)', SNDR_Thermal_Limit));
     
     raw_vs_N = results.sndr_raw(i_sigma_fixed) * ones(1, num_N_red);
-    plot(cfg.scan.N_red_range, raw_vs_N, 'k--', 'LineWidth', 2, 'DisplayName', 'Raw SAR');
+    plot(cfg.scan.N_red_range, raw_vs_N, 'k--', 'LineWidth', 2.5, 'DisplayName', 'Raw SAR');
     
     for a = [3, 4, 5]
         alg_name = alg_names{a};
-        if a == 3, c = color_dlr; mk = '^-'; lw = 2; ms = 8;
-        elseif a == 4, c = color_ata; mk = 's-'; lw = 2; ms = 8;
-        else, c = color_ala; mk = 'o-'; lw = 2.5; ms = 9; end
+        if a == 3, c = color_dlr; mk = '^-'; lw = 2.5; ms = 10;
+        elseif a == 4, c = color_ata; mk = 's-'; lw = 2.5; ms = 10;
+        else, c = color_ala; mk = 'o-'; lw = 2.5; ms = 10; mf = c;
+        end
         
         plot_data = squeeze(results.sndr_fft(a, :, i_sigma_fixed));
-        plot(cfg.scan.N_red_range, plot_data, mk, 'Color', c, 'LineWidth', lw, 'MarkerSize', ms, 'DisplayName', alg_name);
+        if a == 5
+            plot(cfg.scan.N_red_range, plot_data, mk, 'Color', c, 'LineWidth', lw, 'MarkerSize', ms, 'MarkerFaceColor', mf, 'DisplayName', alg_name);
+        else
+            plot(cfg.scan.N_red_range, plot_data, mk, 'Color', c, 'LineWidth', lw, 'MarkerSize', ms, 'DisplayName', alg_name);
+        end
     end
     
     [max_ala, max_idx] = max(plot_data);
@@ -305,7 +314,8 @@ function run_algorithm_comparison()
     title(sprintf('Convergence Efficiency: $\\sigma_n=%.2f$ LSB', cfg.scan.sigma_range(i_sigma_fixed)), 'FontSize', fs_title, 'Interpreter', 'latex');
     legend('Location', 'best', 'FontSize', fs_legend);
     grid on;
-    set(gca, 'FontSize', fs_axis-2);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', fs_axis-2, 'TickLabelInterpreter', 'latex');
+    set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);
     box on;
     xlim([cfg.scan.N_red_range(1)-1, cfg.scan.N_red_range(end)+1]);
     ylim([60, 100]);
@@ -317,36 +327,38 @@ function run_algorithm_comparison()
     % ========================================================================
     % Fig_4: 动态残差分布直方图
     % ========================================================================
-    V_res_before = V_res_typ;
-    V_res_after = V_res_typ - est_ala_typ;
+    V_res_before_LSB = V_res_typ / V_LSB;
+    V_res_after_LSB = V_res_before_LSB - est_ala_typ;
     
-    rms_before = sqrt(mean(V_res_before.^2));
-    rms_after = sqrt(mean(V_res_after.^2));
+    rms_before = sqrt(mean(V_res_before_LSB.^2));
+    rms_after = sqrt(mean(V_res_after_LSB.^2));
     compression_ratio = rms_before / rms_after;
     
     figure('Position', [100, 100, 1000, 700]);
     hold on;
     
-    bins = linspace(min(V_res_before)*1.2, max(V_res_before)*1.2, 60);
+    bins = linspace(min(V_res_before_LSB)*1.2, max(V_res_before_LSB)*1.2, 60);
     
-    histogram(V_res_before, bins, 'FaceColor', 'k', 'FaceAlpha', 0.3, 'DisplayName', sprintf('Before (RMS=%.3f)', rms_before));
-    histogram(V_res_after, bins, 'FaceColor', color_ala, 'FaceAlpha', 0.6, 'DisplayName', sprintf('After ALA (RMS=%.3f)', rms_after));
+    histogram(V_res_before_LSB, bins, 'FaceColor', 'k', 'FaceAlpha', 0.3, 'Normalization', 'pdf', 'EdgeColor', 'none', 'DisplayName', sprintf('Before (RMS=%.3f LSB)', rms_before));
+    histogram(V_res_after_LSB, bins, 'FaceColor', color_ala, 'FaceAlpha', 0.6, 'Normalization', 'pdf', 'EdgeColor', 'none', 'DisplayName', sprintf('After ALA (RMS=%.3f LSB)', rms_after));
     
-    x_fit = linspace(min(V_res_after)*2, max(V_res_after)*2, 200);
-    y_fit = normpdf(x_fit, mean(V_res_after), rms_after);
-    scale_factor = cfg.N_pts * (bins(2) - bins(1));
-    plot(x_fit, y_fit * scale_factor * 0.4, 'r--', 'LineWidth', 2.5, 'DisplayName', 'Gaussian Fit');
+    x_fit = linspace(min(V_res_after_LSB)*2, max(V_res_after_LSB)*2, 200);
+    y_fit = normpdf(x_fit, mean(V_res_after_LSB), rms_after);
+    plot(x_fit, y_fit, 'r--', 'LineWidth', 2.5, 'DisplayName', 'Gaussian Fit');
     
     xline(0, 'k:', 'LineWidth', 1.5, 'DisplayName', 'Zero');
     
     hold off;
     xlabel('Residual Voltage (LSB)', 'Interpreter', 'latex', 'FontSize', fs_axis);
-    ylabel('Count', 'FontSize', fs_axis);
+    ylabel('Probability Density', 'Interpreter', 'latex', 'FontSize', fs_axis);
     title(sprintf('Dynamic Residual Distribution ($\\sigma_n=%.2f$, $N_{red}=%d$)', sigma_typ, N_red_typ), 'FontSize', fs_title, 'Interpreter', 'latex');
-    legend_text = sprintf('RMS_{compression}=%.2f×', compression_ratio);
+    legend_text = sprintf('RMS_{compression}=%.3f×', compression_ratio);
     legend('Location', 'best', 'FontSize', fs_legend);
     annotation('textbox', [0.65, 0.75, 0.25, 0.1], 'String', legend_text, 'FontSize', 13, 'Interpreter', 'latex', 'EdgeColor', 'k', 'FaceAlpha', 0.9);
     grid on;
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', fs_axis-2, 'TickLabelInterpreter', 'latex');
+    set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);
+    box on;
     set(gca, 'FontSize', fs_axis-2);
     box on;
     
@@ -371,7 +383,7 @@ function run_algorithm_comparison()
     
     fprintf(fid, '【仿真配置】\n');
     fprintf(fid, '  ADC分辨率: %d-bit\n', cfg.ADC.N_bits);
-    fprintf(fid, '  采样频率: %.2f MHz\n', cfg.Fs/1e6);
+    fprintf(fid, '  采样频率: %.2f MHz\n', cfg.ADC.Fs/1e6);
     fprintf(fid, '  FFT点数: %d\n', cfg.N_FFT);
     fprintf(fid, '  输入频率: %.2f Hz (相干采样 N_prime=%d)\n', f_in, N_prime);
     fprintf(fid, '  kT/C噪声: %.3f LSB\n', kTC_LSB);
@@ -382,6 +394,7 @@ function run_algorithm_comparison()
     fprintf(fid, '  仿真噪声范围: %.2f - %.2f LSB\n\n', cfg.scan.sigma_range(1), cfg.scan.sigma_range(end));
     
     fprintf(fid, '【SNDR汇总 - N=24 (σ扫描)】\n');
+    fprintf(fid, '  Note: Amplitude Loss Compensation = 0.09 dB (due to 0.99*V_ref)\n');
     fprintf(fid, '%-10s %12s %12s %12s\n', 'Algorithm', 'Min SNDR', 'Max SNDR', 'Gain');
     fprintf(fid, '%-10s %12s %12s %12s\n', '------', '---------', '---------', '-----');
     
@@ -442,38 +455,41 @@ function [D_out, V_res] = run_dynamic_sar_quantization(V_in, ADC, sigma_n)
     V_res = zeros(1, N_pts);
     
     for i = 1:N_pts
+        V_sampled = V_in(i) + V_ref;
         V_dac = 0;
         D_code = 0;
         
         for bit = N_bits:-1:1
-            LSB_weight = 2^(bit-1);
-            comparator_noise_V = sigma_n * V_LSB * randn();
+            weight = 2^(bit-1);
+            V_test = V_dac + weight * V_LSB;
+            comp_noise_V = sigma_n * V_LSB * randn();
             
-            if (V_in(i) - V_dac + comparator_noise_V) > 0
-                D_code = D_code + LSB_weight;
-                V_dac = V_dac + LSB_weight * V_LSB;
-            else
-                V_dac = V_dac - LSB_weight * V_LSB;
+            if (V_sampled - V_test + comp_noise_V) > 0
+                V_dac = V_test;
+                D_code = D_code + weight;
             end
         end
         
         D_out(i) = D_code - (2^(N_bits-1));
-        V_res(i) = V_in(i) - V_dac;
+        V_res(i) = V_sampled - V_dac;
     end
 end
 
 %% ========================================================================
-% 辅助函数: FFT功率谱密度计算
+% 辅助函数: FFT功率谱密度计算 (dBFS归一化)
 %% ========================================================================
-function [psd, freq] = compute_fft_psd(signal, Fs)
+function [psd_dBFS, freq] = compute_fft_psd(signal, Fs, N_bits)
     N = length(signal);
     
     signal = signal - mean(signal);
     
     fft_result = fft(signal, N);
-    psd = (abs(fft_result).^2) / N;
-    psd = psd(1:N/2+1);
-    psd(2:end-1) = 2 * psd(2:end-1);
+    
+    mag = abs(fft_result) / (N/2);
+    mag(1) = mag(1) / 2;
+    
+    A_FS = 2^(N_bits-1);
+    psd_dBFS = 20 * log10(mag(1:N/2+1) / A_FS + eps);
     
     freq = (0:N/2) * Fs / N;
 end
@@ -481,14 +497,16 @@ end
 %% ========================================================================
 % 辅助函数: 从PSD计算SNDR
 %% ========================================================================
-function sndr = compute_sndr_from_psd(psd, freq, f_signal)
+function sndr = compute_sndr_from_psd(psd_dBFS, freq, f_signal)
+    psd_linear = 10.^(psd_dBFS / 10);
+    
     [~, idx_fund] = min(abs(freq - f_signal));
     
     fund_bin_width = 2;
-    fund_bins = max(1, idx_fund-fund_bin_width):min(length(psd), idx_fund+fund_bin_width);
-    fund_power = sum(psd(fund_bins));
+    fund_bins = max(1, idx_fund-fund_bin_width):min(length(psd_linear), idx_fund+fund_bin_width);
+    fund_power = sum(psd_linear(fund_bins));
     
-    total_power = sum(psd);
+    total_power = sum(psd_linear);
     noise_power = total_power - fund_power;
     
     if noise_power > 0
