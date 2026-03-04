@@ -77,8 +77,13 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
         
         p = k ./ N_x;
         
-        p_clamped = max(1e-10, min(1 - 1e-10, p));
-        frac_est = sqrt(2) * sig_th * erfinv(2 * p_clamped - 1);
+        frac_est = zeros(size(p));
+        
+        normal_idx = (k > 0) & (k < N_x);
+        frac_est(normal_idx) = sqrt(2) * sig_th * erfinv(2 * p(normal_idx) - 1);
+        
+        frac_est(k == 0) = -2.5 * sig_th;
+        frac_est(k == N_x) = 2.5 * sig_th;
         
         est(has_post) = pre_flip_sum(has_post) + frac_est;
     end
