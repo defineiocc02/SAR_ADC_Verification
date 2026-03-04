@@ -26,6 +26,7 @@
 %   est        - 数字估计值 (1×N_pts)，最终的残差估计结果（整数 + 小数）
 %   pwr_switch - 切换功耗指示 (1×N_pts)，仅追踪阶段累加
 %   k_final    - 最终"1"的计数 (1×N_pts)，冻结阶段的有效周期数
+%   freeze_res - 冻结时的残差 (1×N_pts)，冻结时刻的追踪电压
 %
 % 算法特点：
 %   - 优点：比 DLR 功耗低，有小数精度
@@ -39,9 +40,10 @@
 %   v2.0 - 添加 Watchdog 机制
 %   v3.0 - 修复两段式拼接逻辑
 %   v4.0 - 恢复 Miki 2015 原始物理机制：追踪→冻结→算术平均
+%   v4.1 - 添加 freeze_res 输出参数，保持接口一致性
 % =========================================================================
 
-function [est, pwr_switch, k_final] = run_ata(V_res, N_red, sig_th, RW_drift)
+function [est, pwr_switch, k_final, freeze_res] = run_ata(V_res, N_red, sig_th, RW_drift)
     %% ========================================================================
     % 步骤1: 初始化变量
     %% ========================================================================
@@ -51,6 +53,7 @@ function [est, pwr_switch, k_final] = run_ata(V_res, N_red, sig_th, RW_drift)
     V_track = V_res;                    % DAC 追踪电压
     dac_state = zeros(1, nT);           % 追踪阶段的 DAC 累加步数（整数）
     pwr_switch = zeros(1, nT);          % 功耗指示
+    freeze_res = zeros(1, nT);          % 冻结时的残差
     
     % 阶段控制变量
     prev_C = zeros(1, nT);              % 上一次的比较器判决
@@ -76,7 +79,11 @@ function [est, pwr_switch, k_final] = run_ata(V_res, N_red, sig_th, RW_drift)
         if step > 1
             toggle = (C_out ~= prev_C);
             % 一旦翻转，永久解除追踪状态，进入冻结平均
+            newly_frozen = toggle & is_tracking;
             is_tracking = is_tracking & ~toggle;
+            
+            % 记录冻结时的残差
+            freeze_res(newly_frozen) = V_track(newly_frozen);
         end
         
         % --- 物理行为分发 ---
