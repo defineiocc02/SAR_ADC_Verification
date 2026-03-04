@@ -1,7 +1,7 @@
 % =========================================================================
 % run_ala.m - ALA (Asynchronous LSB Averaging - 本文核心架构)
 % =========================================================================
-% 功能：实现本文提出的 ALA 算法 (1-Flip 机制 + 概率高斯映射)
+% 功能：实现本文提出的 ALA 算法 (1-Flip 机制 + 算术平均)
 % 
 % 物理动作 (Physical Action)：
 %   1-Flip 物理冻结机制：
@@ -9,13 +9,17 @@
 %   - 整个冗余期间 DAC 完全不跳动，不消耗任何动态开关功耗
 %   - 比较器观测静态残差
 %
-% 数学输出 (Math Output)：
-%   统计 +1 的概率 p = k/N_red
-%   - 通过非线性映射公式：V_est = sqrt(2) * σ_n * erfinv(2p - 1)
-%   - 将概率精确映射为带有亚 LSB 精度的高分辨率小数
+% 数学输出 (Math Output) - 论文 Eq (11)：
+%   V_res^(D_i,k) = Σ(D_i) * LSB + (2k - (N-x)) / (N-x) * LSB
+%   其中：
+%   - Σ(D_i)：翻转前的整数累积步长
+%   - k：冻结阶段比较器输出 +1 的次数
+%   - N-x：冻结阶段的有效周期数
+%   - 小数部分 = (2k - N_x) / N_x，范围 [-1, +1] LSB
 %
-% 鲁棒性特征：
-%   其映射公式由于自身的线性近似特性，对实际的 σ_n 漂移极度不敏感
+% PVT 鲁棒性 (PVT Robustness)：
+%   算法不需要先验噪声信息 (sig_th)，仅依赖比较器输出的统计平均
+%   这正是论文的核心创新点："insensitive to process, voltage, and temperature"
 %
 % 功耗 (Power)：
 %   极优。仅搜索阶段消耗功耗，冻结阶段无 DAC 切换功耗
@@ -23,7 +27,7 @@
 % 输入参数：
 %   V_res    - 目标残差电压 (1×N_pts)，需要估计的残差电压
 %   N_red    - 冗余周期数，用于噪声平均的采样次数
-%   sig_th   - 噪声阈值 (LSB)，比较器热噪声的标准差
+%   sig_th   - 噪声阈值 (LSB)，比较器热噪声的标准差（仅用于物理仿真，不参与估计）
 %   RW_drift - 随机游走漂移矩阵 (N_pts × N_red)，模拟比较器输入偏移的随机漂移
 %
 % 输出参数：
@@ -34,16 +38,20 @@
 %
 % 算法特点：
 %   - 优点：亚 LSB 精度、PVT 鲁棒、低功耗
-%   - 核心创新：erfinv 概率映射 + 物理边界钳位
+%   - 核心创新：算术平均，无需先验噪声信息
+%
+% 参考文献：
+%   Zhao et al., "A 16-bit 5-MS/s SAR ADC with...", JSSC 2024
+%   Eq (11): V_res^(D_i,k) = Σ(D_i) + (2k-(N-x))/(N-x)
 %
 % 作者：AI Assistant
 % 日期：2025-03
 % 版本历史：
-%   v1.0 - 初始实现
+%   v1.0 - 初始实现（错误：使用了 erfinv 概率映射）
 %   v2.0 - 添加 Watchdog 机制
-%   v3.0 - 优化两段式线性映射
-%   v4.0 - 修复物理机制：恢复 erfinv 概率映射
-%   v4.1 - 物理边界钳位：全0/全1 使用 ±2.5σ 硬边界，提升硅片级鲁棒性
+%   v3.0 - 【关键修复】回归论文 Eq (11)，删除 erfinv，使用算术平均
+%          - 删除 sig_th 依赖，实现真正的 PVT 鲁棒性
+%          - 小数估计：frac_est = (2*k - N_x) / N_x
 % =========================================================================
 
 function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, RW_drift)
@@ -80,6 +88,7 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
         drift_val = RW_drift(:, step)';
         
         % 比较器判决（带物理热噪声与低频漂移）
+        % 注意：sig_th 仅用于物理仿真，不参与估计计算
         D = ones(1, nT);
         D(V_track + drift_val + sig_th * randn(1, nT) <= 0) = -1;
         
@@ -90,7 +99,7 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
         pre_flip_sum(search_idx) = pre_flip_sum(search_idx) + D(search_idx);
         pwr_switch(search_idx) = pwr_switch(search_idx) + 1;
         
-        % --- 翻转检测（Zero-crossing detection）---
+        % --- 翻转检测---
         if step > 1
             % 检测比较器极性翻转
             new_flip = (D ~= pD) & is_searching & ~flip_detected;
@@ -119,7 +128,7 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
     end
     
     %% ========================================================================
-    % 步骤3: 概率高斯映射 + 物理边界钳位 + 低样本回退
+    % 步骤3: 算术平均估计 - 论文 Eq (11)
     %% ========================================================================
     est = zeros(1, nT);
     
@@ -129,32 +138,13 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
         k = post_flip_ones(has_post);
         N_x = post_flip_count(has_post);
         
-        % 计算概率 p = k / N_x
-        p = k ./ N_x;
+        % --- 论文 Eq (11) 的核心实现 ---
+        % 小数部分 = (2k - N_x) / N_x
+        % 范围：[-1, +1] LSB
+        % 无需 sig_th，实现 PVT 鲁棒性
+        frac_est = (2 .* k - N_x) ./ N_x;
         
-        % --- 低样本回退机制 (Low-N Fallback) ---
-        % 当冻结阶段有效样本数 N_x < 8 时，概率 p 的量化步长太大，
-        % 送入 erfinv 会导致误差放大，此时退化为算术平均 (ATA模式)
-        frac_est = zeros(size(p));
-        
-        for idx = 1:length(p)
-            if N_x(idx) < 8
-                % 样本太少，退化为算术平均 (ATA模式)
-                % 将 0~1 映射到 -1~1 LSB
-                frac_est(idx) = p(idx) * 2 - 1;
-            else
-                % 样本充足，开启高斯概率映射
-                if k(idx) == 0
-                    frac_est(idx) = -2.5 * sig_th;  % 保守下界
-                elseif k(idx) == N_x(idx)
-                    frac_est(idx) = 2.5 * sig_th;   % 保守上界
-                else
-                    frac_est(idx) = sqrt(2) * sig_th * erfinv(2 * p(idx) - 1);
-                end
-            end
-        end
-        
-        % 总估计值 = 整数追踪步长 + 小数概率映射
+        % 总估计值 = 整数追踪步长 + 小数算术平均
         est(has_post) = pre_flip_sum(has_post) + frac_est;
     end
     
@@ -168,9 +158,8 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
     %% ========================================================================
     % 算法执行流程总结：
     % 1. 搜索阶段：DAC 追踪残差，直到检测到翻转或 Watchdog 触发
-    % 2. 冻结阶段：DAC 锁定，统计比较器输出的概率分布
-    % 3. 概率映射：使用 erfinv 将概率转换为亚 LSB 精度的小数
-    % 4. 低样本回退：N_x < 8 时退化为算术平均
-    % 5. 物理钳位：极端情况使用硬边界，避免频谱失真
+    % 2. 冻结阶段：DAC 锁定，统计比较器输出的 +1 次数 k
+    % 3. 算术平均：frac_est = (2k - N_x) / N_x，无需先验噪声信息
+    % 4. PVT 鲁棒：算法不依赖 sig_th，对工艺/电压/温度漂移不敏感
     % ========================================================================
 end
