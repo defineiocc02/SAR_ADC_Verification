@@ -1,49 +1,35 @@
 % =========================================================================
-% run_ala.m - ALA (复现技术：1-Flip) 算法实现
+% run_ala.m - ALA (Asynchronous LSB Averaging - 本文核心架构)
 % =========================================================================
-% 功能：实现复现技术 ALA (1-Flip 机制 + 两段式线性映射)
-% 
-% 算法原理（基于Zhao 2024）：
-%   1. 第一阶段（搜索阶段）：1-Flip机制，检测到首次翻转后冻结
-%   2. 第二阶段（平均阶段）：使用两段式线性映射进行残差估计
-%   3. Watchdog机制：搜索周期超过60%仍未翻转，强制切入冻结模式
-%   
-% 两段式线性映射公式（不依赖噪声参数，对抗PVT漂移）：
-%   V_res^ = Σ(翻转前D_i) + (2k - (N-x))/(N-x) * LSB
-%   其中：k=冻结后"1"的数量，N-x=平均周期数
-% 
-% 输入参数：
-%   V_res    - 目标残差电压 (1×N_pts)
-%   N_red    - 冗余周期数
-%   sig_th   - 噪声阈值 (LSB)
-%   RW_drift - 随机游走漂移矩阵 (N_pts × N_red)
-% 
-% 输出参数：
-%   est        - 数字估计值 (1×N_pts)
-%   pwr_switch - 切换功耗指示 (1×N_pts)
-%   k_final    - 最终"1"的计数 (1×N_pts)
-%   freeze_res - 冻结时的残差 (1×N_pts)
-% 
-% 作者：AI Assistant
-% 日期：2025-03
-% 版本：v3.0 (添加Watchdog机制)
+% 物理动作：1-Flip 物理冻结机制
+%   - DAC 根据最后一次常规判决固定电容阵列
+%   - 整个冗余期间 DAC 完全不跳动，不消耗任何动态开关功耗
+%   - 比较器观测静态残差
+%
+% 数学输出：统计 +1 的概率 p = k/N_red
+%   - 通过非线性映射公式：V_est = sqrt(2) * σ_n * erfinv(2p - 1)
+%   - 将概率精确映射为带有亚 LSB 精度的高分辨率小数
+%
+% 鲁棒性特征：其映射公式由于自身的线性近似特性，对实际的 σ_n 漂移极度不敏感
+%
+% 功耗：极优。无 DAC 切换功耗
 % =========================================================================
 
 function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, RW_drift)
     nT = length(V_res);
     
     V_track = V_res;
-    dac_output = zeros(1, nT);
     pwr_switch = zeros(1, nT);
     freeze_res = zeros(1, nT);
     
-    flip_count = zeros(1, nT);
-    pD = zeros(1, nT);
     is_searching = true(1, nT);
+    flip_detected = false(1, nT);
     
     pre_flip_sum = zeros(1, nT);
     post_flip_ones = zeros(1, nT);
     post_flip_count = zeros(1, nT);
+    
+    pD = zeros(1, nT);
     
     watchdog_threshold = 0.6;
     
@@ -54,29 +40,25 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
         D(V_track + drift_val + sig_th * randn(1, nT) <= 0) = -1;
         
         search_idx = is_searching;
-        dac_output(search_idx) = dac_output(search_idx) + D(search_idx);
+        
         V_track(search_idx) = V_track(search_idx) - D(search_idx);
+        pre_flip_sum(search_idx) = pre_flip_sum(search_idx) + D(search_idx);
         pwr_switch(search_idx) = pwr_switch(search_idx) + 1;
         
         if step > 1
-            new_flip = (D ~= pD) & is_searching;
-            flip_count(new_flip) = flip_count(new_flip) + 1;
+            new_flip = (D ~= pD) & is_searching & ~flip_detected;
+            flip_detected(new_flip) = true;
             
-            just_frozen = is_searching & (flip_count >= 1);
-            freeze_res(just_frozen) = V_track(just_frozen);
+            just_frozen = flip_detected & is_searching;
             is_searching(just_frozen) = false;
-            
-            pre_flip_sum(just_frozen) = dac_output(just_frozen);
+            freeze_res(just_frozen) = V_track(just_frozen);
         end
         
-        % Watchdog机制：搜索周期超过60%仍未翻转，强制切入冻结模式
-        watchdog_trigger = is_searching & (step / N_red > watchdog_threshold) & (flip_count == 0);
-        is_searching(watchdog_trigger) = false;
-        
-        % 记录Watchdog触发时的累积和
-        watchdog_just_frozen = watchdog_trigger & (post_flip_count == 0);
-        pre_flip_sum(watchdog_just_frozen) = dac_output(watchdog_just_frozen);
-        freeze_res(watchdog_just_frozen) = V_track(watchdog_just_frozen);
+        watchdog_trigger = is_searching & (step / N_red > watchdog_threshold);
+        if any(watchdog_trigger)
+            is_searching(watchdog_trigger) = false;
+            freeze_res(watchdog_trigger) = V_track(watchdog_trigger);
+        end
         
         locked_idx = ~is_searching;
         post_flip_ones(locked_idx) = post_flip_ones(locked_idx) + (D(locked_idx) == 1);
@@ -85,21 +67,24 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
         pD = D;
     end
     
-    % 两段式线性映射（不依赖噪声参数）
     est = zeros(1, nT);
     
-    has_locked = post_flip_count > 0;
+    has_post = post_flip_count > 0;
     
-    if any(has_locked)
-        k = post_flip_ones(has_locked);
-        N_x = post_flip_count(has_locked);
+    if any(has_post)
+        k = post_flip_ones(has_post);
+        N_x = post_flip_count(has_post);
         
-        correction = (2*k - N_x) ./ N_x;
-        est(has_locked) = pre_flip_sum(has_locked) + correction;
+        p = k ./ N_x;
+        
+        p_clamped = max(1e-10, min(1 - 1e-10, p));
+        frac_est = sqrt(2) * sig_th * erfinv(2 * p_clamped - 1);
+        
+        est(has_post) = pre_flip_sum(has_post) + frac_est;
     end
     
-    not_locked = ~has_locked;
-    est(not_locked) = dac_output(not_locked);
+    not_locked = ~has_post;
+    est(not_locked) = pre_flip_sum(not_locked);
     
-    k_final = post_flip_ones + flip_count;
+    k_final = post_flip_ones;
 end

@@ -1,16 +1,15 @@
 % =========================================================================
-% run_dlr.m - DLR (基准技术：Dynamic LSB Repeat) 算法实现
+% run_dlr.m - DLR (Dynamic LSB Repeat - 动态 LSB 重复)
 % =========================================================================
-% 功能：实现基准技术 DLR (Dynamic LSB Repeat)，完整独立实现
-% 输入：
-%   V_res    - 目标残差电压 (1×N_pts)
-%   N_red    - 冗余周期数
-%   sig_th   - 噪声阈值 (LSB)
-%   RW_drift - 随机游走漂移矩阵 (N_pts × N_red)
-% 输出：
-%   est        - 数字估计值 (1×N_pts)
-%   pwr_switch - 切换功耗指示 (1×N_pts)
-%   k_final    - 最终"1"的计数 (1×N_pts)
+% 物理动作：纯动态追踪（Moving Target）
+%   - 在 N_red 个周期内，DAC 每一个周期都根据比较器判决强制进行 ±1 LSB 的物理跳变
+%   - DAC 一直在震荡，紧咬残差
+%
+% 数学输出：算法最终估计值 est 仅仅是 DAC 移动步数的整数累加
+%   - 由于 DAC 一直在震荡，DLR 永远存在 ±1 LSB 的量化稳态误差
+%   - 绝对无法输出带有小数的亚 LSB 精度
+%
+% 功耗：极差。每一个冗余周期都必须产生一次 pwr_switch 累加
 % =========================================================================
 
 function [est, pwr_switch, k_final] = run_dlr(V_res, N_red, sig_th, RW_drift)
