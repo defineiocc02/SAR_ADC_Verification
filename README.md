@@ -137,23 +137,23 @@ SAR_ADC_Verification/
 │   │   │   ├── config.m                       # 配置中心
 │   │   │   ├── run_algorithm_comparison.m     # 多维度对比评估 ⭐
 │   │   │   ├── run_monte_carlo.m              # 蒙特卡洛仿真
-│   │   │   ├── run_main_sar.m                 # SAR量化引擎
-│   │   │   ├── calc_fft.m                     # FFT分析
+│   │   │   ├── run_main_sar.m                 # SAR 量化引擎
+│   │   │   ├── calc_fft.m                     # FFT 分析
 │   │   │   ├── generate_figures.m             # 图表生成
 │   │   │   ├── generate_report.m              # 报告生成
-│   │   │   └── algorithms/                    # 7个算法模块
+│   │   │   └── algorithms/                    # 7 个算法模块
 │   │   │       ├── run_mle.m
 │   │   │       ├── run_be.m
 │   │   │       ├── run_dlr.m
-│   │   │       ├── run_ata.m                  # v5.0
-│   │   │       ├── run_ala.m                  # v3.0
+│   │   │       ├── run_ata.m                  # v6.0
+│   │   │       ├── run_ala.m                  # v5.0
 │   │   │       ├── run_htla.m
 │   │   │       └── run_adaptive.m
 │   │   └── README.md                          # 框架说明
 │   └── Modules/                               # 辅助模块
-├── ComparisonResults/                         # 对比评估输出
-├── ModularResults/                            # 完整验证输出
+├── Results/                                   # 统一输出目录 ⭐
 ├── References/                                # 参考文献
+├── archive/                                   # 归档旧代码
 └── README.md                                  # 本文档
 ```
 
@@ -172,8 +172,9 @@ main
 
 | 类型 | 路径 |
 |------|------|
-| 图表 | `ComparisonResults/Fig_*.png` |
-| 报告 | `ComparisonResults/Comparison_Report.txt` |
+| 图表 | `Results/Fig_*.png` |
+| 报告 | `Results/Report_*.txt` |
+| 数据 | `Results/Data_*.mat` |
 
 ---
 

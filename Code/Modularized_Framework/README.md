@@ -84,8 +84,9 @@ main
 
 | 类型 | 路径 |
 |------|------|
-| 对比图表 | `ComparisonResults/Fig_*.png` |
-| 对比报告 | `ComparisonResults/Comparison_Report.txt` |
+| 对比图表 | `Results/Fig_*.png` |
+| 对比报告 | `Results/Report_*.txt` |
+| 数据文件 | `Results/Data_*.mat` |
 
 ---
 

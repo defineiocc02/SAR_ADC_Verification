@@ -58,7 +58,7 @@ function run_algorithm_comparison()
     P_th = P_FS / (10^(target_SNR_dB/10));
     SNDR_Thermal_Limit = target_SNR_dB;
     
-    cfg.output_dir = fullfile(fileparts(mfilename('fullpath')), '..', '..', 'ComparisonResults');
+    cfg.output_dir = fullfile(fileparts(mfilename('fullpath')), '..', '..', '..', 'Results');
     if ~exist(cfg.output_dir, 'dir')
         mkdir(cfg.output_dir);
     end
