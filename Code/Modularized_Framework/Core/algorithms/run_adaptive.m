@@ -6,7 +6,7 @@
 %   V_res    - 目标残差电压 (1×N_pts)
 %   N_red    - 冗余周期数
 %   sig_th   - 噪声阈值 (LSB)
-%   LUT      - 查找表 (N_red × (N_red+1))
+%   LUT      - 查找表 (1×(N_red+1))
 %   RW_drift - 随机游走漂移矩阵 (N_pts × N_red)
 % 输出：
 %   est        - 数字估计值 (1×N_pts)
@@ -66,21 +66,27 @@ function [est, pwr_switch, k_final, freeze_res] = run_adaptive(V_res, N_red, sig
         pD = D;
     end
     
-    % 自适应核心：根据噪声水平选择线性/LUT混合补偿
+    % ========================================================================
+    % Adaptive 核心修复：纯净的分支补偿机制
+    % ========================================================================
     est = dac_switched;
     valid = n_avg > 0;
     
     if any(valid)
-        y = (2 * k_ones(valid) ./ n_avg(valid)) - 1;
-        base_lin = sqrt(pi/2) * sig_th * y;
+        k = k_ones(valid);
+        n = n_avg(valid);
+        p = k ./ n;
         
         if sig_th < 0.5
+            % 【低噪声策略】: 线性近似补偿 (消除 LUT 叠加)
+            y = 2 .* p - 1;
+            base_lin = sqrt(pi/2) * sig_th * y;
             est(valid) = est(valid) + base_lin;
         else
-            safe_avg = max(1, min(n_avg(valid), size(LUT, 1)));
-            safe_k = min(max(0, k_ones(valid)), safe_avg);
-            lut_idx = sub2ind(size(LUT), safe_avg, safe_k + 1);
-            est(valid) = est(valid) + base_lin + LUT(lut_idx);
+            % 【高噪声策略】: 1D LUT 概率映射
+            N_LUT = length(LUT) - 1;
+            k_mapped = round(p .* N_LUT);
+            est(valid) = est(valid) + LUT(k_mapped + 1);
         end
     end
     k_final = k_ones;

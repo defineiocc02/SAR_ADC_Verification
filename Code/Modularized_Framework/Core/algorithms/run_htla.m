@@ -6,7 +6,7 @@
 %   V_res    - 目标残差电压 (1×N_pts)
 %   N_red    - 冗余周期数
 %   sig_th   - 噪声阈值 (LSB)
-%   LUT      - 查找表 (N_red × (N_red+1))
+%   LUT      - 查找表 (1×(N_red+1))
 %   RW_drift - 随机游走漂移矩阵 (N_pts × N_red)
 % 输出：
 %   est        - 数字估计值 (1×N_pts)
@@ -59,20 +59,25 @@ function [est, pwr_switch, k_final, freeze_res] = run_htla(V_res, N_red, sig_th,
         pD = D;
     end
     
-    % HT-LA 核心：LUT 补偿（仅对已冻结并进入后端平均阶段的样本生效）
+    % ========================================================================
+    % HT-LA 核心修复：1D LUT 概率映射 (消除双重补偿与查表锁死)
+    % ========================================================================
     est = dac_switched;
     valid = n_avg > 0;
     
     if any(valid)
-        y = (2 * k_ones(valid) ./ n_avg(valid)) - 1;
-        V_lin = sqrt(pi/2) * sig_th * y;
+        k = k_ones(valid);
+        n = n_avg(valid);
         
-        safe_avg = max(1, min(n_avg(valid), size(LUT, 1)));
-        safe_k = min(max(0, k_ones(valid)), safe_avg);
-        lut_idx = sub2ind(size(LUT), safe_avg, safe_k + 1);
-        lut_comp = LUT(lut_idx);
+        % 计算概率 p
+        p = k ./ n;
         
-        est(valid) = est(valid) + V_lin + lut_comp;
+        % 将可变长度的 n_avg 的概率，等比例映射到 1D LUT 的网格上
+        N_LUT = length(LUT) - 1;
+        k_mapped = round(p .* N_LUT);
+        
+        % 直接查表 (正规生成的 LUT 中点必为 0)
+        est(valid) = est(valid) + LUT(k_mapped + 1);
     end
     k_final = k_ones;
 end
