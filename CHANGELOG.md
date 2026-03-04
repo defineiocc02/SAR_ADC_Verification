@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New RUN_MODE 3: False Freezing Rate analysis in `main.m`
 - New Fig_5: False Freezing Rate vs. Comparator Noise curve
 - JSSC-style visualization for false freezing rate comparison
+- Comprehensive Git commit conventions document (`.trae/docs/GIT_COMMIT_CONVENTIONS.md`)
+- Version management strategy document (`.trae/docs/VERSION_MANAGEMENT.md`)
+- Enhanced `.gitignore` with comprehensive rules for MATLAB and development files
 
 ### Fixed
 - **Critical**: Fixed residual calculation baseline misalignment for DLR/ATA/HT-LA/Adaptive
@@ -19,9 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Ensures all algorithms use the same zero-mean baseline
 - **Performance**: DLR residual compression ratio improved from 0.90x to ~1.5x
 - **Performance**: ATA residual compression ratio improved from 0.71x to ~2.0x
+- **Code Quality**: Removed all unused variables and linter warnings
+- **Code Quality**: Modernized date functions from `datestr(now)` to `datetime("now")`
 
 ### Changed
 - Output directory path in `run_false_freezing_analysis.m` corrected to project root `Results/`
+- Enhanced code comments in `run_false_freezing_analysis.m` with detailed physical background
+- Removed temporary log file `run_log_fixed.txt`
+
+### Documentation
+- Updated README.md with version badge and comprehensive API documentation
+- Updated CHANGELOG.md with complete version history
+- Added detailed Git workflow and release process documentation
 
 ## [4.1.0] - 2026-03-04
 

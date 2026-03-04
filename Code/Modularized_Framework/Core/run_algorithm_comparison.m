@@ -46,7 +46,6 @@ function run_algorithm_comparison()
     cfg.N_MC = 20;
     
     target_SNR_dB = 91.8;
-    P_FS = (2^(cfg.ADC.N_bits-1))^2 / 2;
     k_B = 1.380649e-23;
     T = 300;
     C_s = cfg.ADC.C_sample;
@@ -55,7 +54,6 @@ function run_algorithm_comparison()
     kTC_LSB = kTC_noise / V_LSB;
     fprintf('    kT/C噪声: %.3f LSB (对应%.1f dB)\n', kTC_LSB, target_SNR_dB);
     
-    P_th = P_FS / (10^(target_SNR_dB/10));
     SNDR_Thermal_Limit = target_SNR_dB;
     
     cfg.output_dir = fullfile(fileparts(mfilename('fullpath')), '..', '..', '..', 'Results');
@@ -243,13 +241,11 @@ function run_algorithm_comparison()
     
     fprintf('\n>>> [5/6] 生成可视化图表...\n');
     
-    color_raw = [0.2, 0.2, 0.2];
     color_ala = [0.85, 0.1, 0.1];
     color_ata = [0, 0, 0.8];
     color_dlr = [0, 0.6, 0];
     color_mle = [0.5, 0.5, 0.5];
     color_be = [0.6, 0.6, 0.6];
-    color_thermal = [0.9, 0, 0];
     
     fs_axis = 14;
     fs_title = 16;
@@ -296,10 +292,6 @@ function run_algorithm_comparison()
     
     semilogx(freq_typ/1e3, psd_raw_typ, 'k-', 'LineWidth', 1.0, 'DisplayName', sprintf('Raw (SNDR=%.1f dB)', sndr_raw_typ));
     semilogx(freq_typ/1e3, psd_ala_typ, 'r-', 'LineWidth', 1.5, 'DisplayName', sprintf('ALA (SNDR=%.1f dB)', sndr_ala_typ));
-    
-    [~, idx_fund] = min(abs(freq_typ - f_in));
-    fund_power_raw = 10^(psd_raw_typ(idx_fund)/10);
-    fund_power_ala = 10^(psd_ala_typ(idx_fund)/10);
     
     noise_floor_raw = mean(10.^(psd_raw_typ(end-100:end)/10));
     noise_floor_ala = mean(10.^(psd_ala_typ(end-100:end)/10));
@@ -439,7 +431,7 @@ function run_algorithm_comparison()
     %% ========================================================================
     fprintf('\n>>> [6/6] 生成分析报告...\n');
     
-    date_str = datestr(now, 'yyyymmdd_HHMMSS');
+    date_str = string(datetime("now", "Format", "yyyyMMdd_HHmmss"));
     report_file = fullfile(cfg.output_dir, ['Report_SAR_Comparison_', date_str, '.txt']);
     fid = fopen(report_file, 'w');
     
@@ -506,7 +498,7 @@ function run_algorithm_comparison()
     fprintf(fid, '================================================================================\n');
     fprintf(fid, '  MATLAB版本: %s\n', version);
     fprintf(fid, '  总耗时: %.2f 秒\n', toc);
-    fprintf(fid, '  生成时间: %s\n', datestr(now));
+    fprintf(fid, '  生成时间: %s\n', string(datetime("now")));
     
     fclose(fid);
     

@@ -67,7 +67,6 @@ function [est, pwr_switch, k_final, freeze_res] = run_ata(V_res, N_red, sig_th, 
     V_track = V_res;                    % DAC 追踪电压
     D_DEC = zeros(1, nT);               % 追踪步长（论文 Eq (8)）
     pwr_switch = zeros(1, nT);          % 功耗指示
-    freeze_res = zeros(1, nT);          % 最终追踪电压
     
     % 两阶段累加器 - 论文 Eq (6) + Eq (7)
     sum_phase1 = zeros(1, nT);          % 翻转前的直接累加 D_OUT (Eq 6)
