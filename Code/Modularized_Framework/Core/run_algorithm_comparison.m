@@ -33,28 +33,30 @@ function run_algorithm_comparison()
     
     cfg.ADC.Resolution = 16;
     cfg.ADC.N_bits = 16;
-    cfg.ADC.Fs = 5e6;
-    cfg.ADC.V_ref = 1.0;
-    cfg.ADC.V_dd = 1.8;
-    cfg.ADC.C_sample = 10e-12;
+    cfg.ADC.Fs = 1e6;
+    cfg.ADC.V_ref = 3.3;
+    cfg.ADC.V_dd = 3.3;
+    cfg.ADC.C_sample = 20.1e-12;
     
     cfg.scan.N_red_range = [4, 8, 12, 16, 20, 24];
-    cfg.scan.sigma_range = linspace(0.4, 1.2, 9);
+    cfg.scan.sigma_range = linspace(0.25, 1.0, 16);
     
     cfg.N_FFT = 8192;
     cfg.N_pts = cfg.N_FFT;
     cfg.N_MC = 20;
     
-    target_SNR_dB = 91.8;
     k_B = 1.380649e-23;
     T = 300;
     C_s = cfg.ADC.C_sample;
-    kTC_noise = sqrt(k_B * T / C_s);
+    kTC_noise = sqrt(2 * k_B * T / C_s);
     V_LSB = 2 * cfg.ADC.V_ref / (2^cfg.ADC.N_bits);
     kTC_LSB = kTC_noise / V_LSB;
-    fprintf('    kT/C噪声: %.3f LSB (对应%.1f dB)\n', kTC_LSB, target_SNR_dB);
+    SNR_thermal = 10*log10(((cfg.ADC.V_ref)^2/2) / kTC_noise^2);
+    fprintf('    kT/C噪声: %.3f LSB (%.2f uV_rms)\n', kTC_LSB, kTC_noise*1e6);
+    fprintf('    热极限SNR: %.1f dB (差分满量程%.1fVpp)\n', SNR_thermal, 2*cfg.ADC.V_ref);
+    fprintf('    目标: 复现Zhao JSSC 2024 (95.1 dB SNDR)\n');
     
-    SNDR_Thermal_Limit = target_SNR_dB;
+    SNDR_Thermal_Limit = SNR_thermal;
     
     cfg.output_dir = fullfile(fileparts(mfilename('fullpath')), '..', '..', '..', 'Results');
     if ~exist(cfg.output_dir, 'dir')
@@ -122,7 +124,8 @@ function run_algorithm_comparison()
         for i_N = 1:num_N_red
             N_red = cfg.scan.N_red_range(i_N);
             
-            RW_drift = randn(cfg.N_pts, N_red) * (sigma_th * 0.3);
+            sigma_th_val = sigma_th;
+            RW_drift = randn(cfg.N_pts, N_red) * sigma_th_val * 0.3;
             
             sig_th = sigma_th;
             
@@ -184,7 +187,8 @@ function run_algorithm_comparison()
     
     [D_raw_typ, V_res_typ] = run_dynamic_sar_quantization(V_in_noisy, cfg.ADC, sigma_typ);
     V_res_typ_LSB = (V_res_typ / V_LSB) - 0.5;
-    RW_drift_typ = randn(cfg.N_pts, N_red_typ) * (sigma_typ * 0.3);
+    sigma_typ_val = sigma_typ;
+    RW_drift_typ = randn(cfg.N_pts, N_red_typ) * sigma_typ_val * 0.3;
     
     % 公平测试所有 7 种算法
     % 注意：截取 LUT_MLE(1:N_red_typ+1) 传递对应长度的查找表，并补齐 RW_drift_typ 参数
@@ -278,7 +282,7 @@ function run_algorithm_comparison()
     set(gca, 'FontName', 'Times New Roman', 'FontSize', fs_axis-2, 'TickLabelInterpreter', 'latex');
     set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);
     box on;
-    ylim([84, 93]);
+    ylim([84, 100]);
     
     saveas(gcf, fullfile(cfg.output_dir, 'Fig_1_SNDR_vs_Sigma_PVT.png'));
     save_fig_eps(gcf, 'Fig_1_SNDR_vs_Sigma_PVT');
@@ -360,7 +364,7 @@ function run_algorithm_comparison()
     set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);
     box on;
     xlim([cfg.scan.N_red_range(1)-1, cfg.scan.N_red_range(end)+1]);
-    ylim([84, 93]);
+    ylim([84, 100]);
     
     saveas(gcf, fullfile(cfg.output_dir, 'Fig_3_SNDR_vs_Nred.png'));
     save_fig_eps(gcf, 'Fig_3_SNDR_vs_Nred');
@@ -408,6 +412,8 @@ function run_algorithm_comparison()
     
     xline(0, 'k:', 'LineWidth', 1.5, 'DisplayName', 'Zero');
     
+    xlim([-1.5, 1.5]);
+    
     hold off;
     xlabel('Residual Voltage (LSB)', 'Interpreter', 'latex', 'FontSize', fs_axis);
     ylabel('Probability Density', 'Interpreter', 'latex', 'FontSize', fs_axis);
@@ -432,7 +438,7 @@ function run_algorithm_comparison()
     fprintf('\n>>> [6/6] 生成分析报告...\n');
     
     date_str = string(datetime("now", "Format", "yyyyMMdd_HHmmss"));
-    report_file = fullfile(cfg.output_dir, ['Report_SAR_Comparison_', date_str, '.txt']);
+    report_file = fullfile(cfg.output_dir, ['Report_SAR_Comparison_', char(date_str), '.txt']);
     fid = fopen(report_file, 'w');
     
     fprintf(fid, '================================================================================\n');
