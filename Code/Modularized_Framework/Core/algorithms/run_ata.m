@@ -10,10 +10,13 @@
 %   - 如果连续两次比较器输出相同（'1/1' 或 '0/0'），步长加/减 1
 %   - 如果连续两次比较器输出不同（翻转），步长保持不变
 %
-% 数学输出 (Math Output) - 论文 Eq (8)：
-%   D_DEC(i) = D_DEC(i-1) + D_OUT(i)  [如果 D_OUT(i) == D_OUT(i-1)]
-%   D_DEC(i) = D_DEC(i-1)             [如果 D_OUT(i) != D_OUT(i-1)]
-%   最终估计值：est = Σ D_DEC(i)
+% 数学输出 (Math Output) - 论文 Eq (6) + Eq (7)：
+%   阶段1（翻转前，共 M 次）：
+%     V_res,ATA,1 = Σ D_OUT(i) * LSB
+%   阶段2（翻转后，从 M+1 到 N）：
+%     V_res,ATA,2 = Σ D_DEC(i) / (N-M) * LSB
+%   最终估计值：
+%     est = V_res,ATA,1 + V_res,ATA,2
 %
 % 关键特征：
 %   论文批评："Since the residue voltage changes during tracking averaging,
@@ -42,16 +45,16 @@
 %
 % 参考文献：
 %   Miki et al., "A 16-bit 5-MS/s SAR ADC...", JSSC 2015
-%   Eq (8): D_DEC(i) 更新逻辑
+%   Eq (6): V_res,ATA,1 = Σ D_OUT(i) * LSB
+%   Eq (7): V_res,ATA,2 = Σ D_DEC(i) / (N-M) * LSB
 %
 % 作者：AI Assistant
 % 日期：2025-03
 % 版本历史：
 %   v1.0 - 初始实现（错误：翻转后冻结 DAC）
 %   v2.0 - 添加 Watchdog 机制
-%   v3.0 - 【关键修复】实现真正的 ATA：DAC 持续追踪
-%          - 删除冻结逻辑，DAC 在整个周期内持续跳变
-%          - 实现 Eq (8) 的追踪步长更新逻辑
+%   v3.0 - 实现 DAC 持续追踪，Eq (8) 步长更新
+%   v4.0 - 【关键修复】添加 Eq (7) 除法平均，分离两阶段累加器
 % =========================================================================
 
 function [est, pwr_switch, k_final, freeze_res] = run_ata(V_res, N_red, sig_th, RW_drift)
@@ -63,9 +66,14 @@ function [est, pwr_switch, k_final, freeze_res] = run_ata(V_res, N_red, sig_th, 
     % 物理状态变量
     V_track = V_res;                    % DAC 追踪电压
     D_DEC = zeros(1, nT);               % 追踪步长（论文 Eq (8)）
-    est = zeros(1, nT);                 % 累积估计值
     pwr_switch = zeros(1, nT);          % 功耗指示
     freeze_res = zeros(1, nT);          % 最终追踪电压
+    
+    % 两阶段累加器 - 论文 Eq (6) + Eq (7)
+    sum_phase1 = zeros(1, nT);          % 翻转前的直接累加 D_OUT (Eq 6)
+    sum_phase2 = zeros(1, nT);          % 翻转后的 D_DEC 累加 (Eq 7)
+    N_minus_M = zeros(1, nT);           % 记录平均阶段的周期数 (N-M)
+    has_flipped = false(1, nT);         % 标记是否已发生首次翻转
     
     % 统计变量
     k_final = zeros(1, nT);             % 比较器输出 1 的次数
@@ -101,11 +109,24 @@ function [est, pwr_switch, k_final, freeze_res] = run_ata(V_res, N_red, sig_th, 
             % D_DEC(~same_decision) 保持不变
         end
         
+        % --- 检测首次翻转点 M ---
+        if step > 1
+            new_flip = (D_OUT ~= prev_D) & ~has_flipped;
+            has_flipped(new_flip) = true;
+        end
+        
+        % --- 根据阶段分离累加器 ---
+        % 阶段1 (Eq 6): 未翻转前，直接累加 D_OUT
+        phase1_idx = ~has_flipped;
+        sum_phase1(phase1_idx) = sum_phase1(phase1_idx) + D_OUT(phase1_idx);
+        
+        % 阶段2 (Eq 7): 翻转后，累加 D_DEC 用于后续平均
+        phase2_idx = has_flipped;
+        sum_phase2(phase2_idx) = sum_phase2(phase2_idx) + D_DEC(phase2_idx);
+        N_minus_M(phase2_idx) = N_minus_M(phase2_idx) + 1;
+        
         % --- DAC 追踪跳变 ---
         V_track = V_track - D_DEC;
-        
-        % --- 累积估计值 ---
-        est = est + D_DEC;
         
         % --- 功耗累加（每个周期都耗电）---
         pwr_switch = pwr_switch + 1;
@@ -118,11 +139,23 @@ function [est, pwr_switch, k_final, freeze_res] = run_ata(V_res, N_red, sig_th, 
     freeze_res = V_track;
     
     %% ========================================================================
+    % 步骤3: 执行 Eq (7) 的除法重构
+    %% ========================================================================
+    % 避免除以 0
+    valid_avg = N_minus_M > 0;
+    frac_est = zeros(1, nT);
+    frac_est(valid_avg) = sum_phase2(valid_avg) ./ N_minus_M(valid_avg);
+    
+    % 最终估计值 = 阶段1的整数 + 阶段2的平均小数
+    est = sum_phase1 + frac_est;
+    
+    %% ========================================================================
     % 算法执行流程总结：
     % 1. DAC 在整个周期内持续追踪跳变
     % 2. 追踪步长 D_DEC 根据连续判决结果动态更新
     % 3. 每个周期都消耗开关功耗
-    % 4. 最终估计值是追踪步长的累加
-    % 5. 关键缺陷：残差在平均期间变化，估计精度受限
+    % 4. 阶段1：翻转前直接累加 D_OUT
+    % 5. 阶段2：翻转后累加 D_DEC 并除以 (N-M) 取平均
+    % 6. 关键缺陷：残差在平均期间变化，估计精度受限
     % ========================================================================
 end
