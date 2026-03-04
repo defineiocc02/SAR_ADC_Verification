@@ -223,12 +223,12 @@ function run_algorithm_comparison()
     xlabel('$\sigma_n$ (LSB)', 'Interpreter', 'latex', 'FontSize', fs_axis);
     ylabel('SNDR (dB)', 'Interpreter', 'latex', 'FontSize', fs_axis);
     title('PVT Robustness Test: Dynamic SNDR vs Comparator Noise', 'FontSize', fs_title, 'Interpreter', 'latex');
-    legend('Location', 'best', 'FontSize', fs_legend);
+    legend('Location', 'SouthEast', 'FontSize', fs_legend);
     grid on;
     set(gca, 'FontName', 'Times New Roman', 'FontSize', fs_axis-2, 'TickLabelInterpreter', 'latex');
     set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);
     box on;
-    ylim([60, 100]);
+    ylim([84, 93]);
     
     saveas(gcf, fullfile(cfg.output_dir, 'Fig_1_SNDR_vs_Sigma_PVT.png'));
     save_fig_eps(gcf, 'Fig_1_SNDR_vs_Sigma_PVT');
@@ -265,8 +265,8 @@ function run_algorithm_comparison()
     xlim([0.1, cfg.ADC.Fs/2e3]);
     ylim([-150, 0]);
     
-    annotation('textbox', [0.6, 0.75, 0.25, 0.1], 'String', sprintf('Noise Floor\\Delta = +%.1f dB', floor_improvement), ...
-        'FontSize', 12, 'Interpreter', 'latex', 'EdgeColor', 'k', 'FaceAlpha', 0.9);
+    annotation('textbox', [0.15, 0.15, 0.25, 0.1], 'String', sprintf('Noise Floor $\\Delta$ = +%.1f dB', floor_improvement), ...
+        'FontSize', 12, 'Interpreter', 'latex', 'EdgeColor', 'k', 'BackgroundColor', 'w', 'FaceAlpha', 0.9);
     
     saveas(gcf, fullfile(cfg.output_dir, 'Fig_2_FFT_Spectrum_Comparison.png'));
     save_fig_eps(gcf, 'Fig_2_FFT_Spectrum_Comparison');
@@ -312,13 +312,13 @@ function run_algorithm_comparison()
     xlabel('$N_{red}$', 'Interpreter', 'latex', 'FontSize', fs_axis);
     ylabel('SNDR (dB)', 'Interpreter', 'latex', 'FontSize', fs_axis);
     title(sprintf('Convergence Efficiency: $\\sigma_n=%.2f$ LSB', cfg.scan.sigma_range(i_sigma_fixed)), 'FontSize', fs_title, 'Interpreter', 'latex');
-    legend('Location', 'best', 'FontSize', fs_legend);
+    legend('Location', 'SouthEast', 'FontSize', fs_legend);
     grid on;
     set(gca, 'FontName', 'Times New Roman', 'FontSize', fs_axis-2, 'TickLabelInterpreter', 'latex');
     set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);
     box on;
     xlim([cfg.scan.N_red_range(1)-1, cfg.scan.N_red_range(end)+1]);
-    ylim([60, 100]);
+    ylim([84, 93]);
     
     saveas(gcf, fullfile(cfg.output_dir, 'Fig_3_SNDR_vs_Nred.png'));
     save_fig_eps(gcf, 'Fig_3_SNDR_vs_Nred');
@@ -352,9 +352,9 @@ function run_algorithm_comparison()
     xlabel('Residual Voltage (LSB)', 'Interpreter', 'latex', 'FontSize', fs_axis);
     ylabel('Probability Density', 'Interpreter', 'latex', 'FontSize', fs_axis);
     title(sprintf('Dynamic Residual Distribution ($\\sigma_n=%.2f$, $N_{red}=%d$)', sigma_typ, N_red_typ), 'FontSize', fs_title, 'Interpreter', 'latex');
-    legend_text = sprintf('RMS_{compression}=%.3f×', compression_ratio);
+    legend_text = sprintf('$\\text{RMS}_{\\text{comp}} = %.2f\\times$', compression_ratio);
     legend('Location', 'best', 'FontSize', fs_legend);
-    annotation('textbox', [0.65, 0.75, 0.25, 0.1], 'String', legend_text, 'FontSize', 13, 'Interpreter', 'latex', 'EdgeColor', 'k', 'FaceAlpha', 0.9);
+    annotation('textbox', [0.65, 0.75, 0.25, 0.1], 'String', legend_text, 'FontSize', 13, 'Interpreter', 'latex', 'EdgeColor', 'k', 'BackgroundColor', 'w', 'FaceAlpha', 0.9);
     grid on;
     set(gca, 'FontName', 'Times New Roman', 'FontSize', fs_axis-2, 'TickLabelInterpreter', 'latex');
     set(gca, 'GridAlpha', 0.25, 'MinorGridAlpha', 0.1);

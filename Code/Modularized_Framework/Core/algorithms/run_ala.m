@@ -119,7 +119,7 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
     end
     
     %% ========================================================================
-    % 步骤3: 概率高斯映射 + 物理边界钳位
+    % 步骤3: 概率高斯映射 + 物理边界钳位 + 低样本回退
     %% ========================================================================
     est = zeros(1, nT);
     
@@ -132,18 +132,27 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
         % 计算概率 p = k / N_x
         p = k ./ N_x;
         
-        % --- 物理边界钳位 (Silicon-proven Robustness) ---
-        % 不再使用 1e-10 的数学钳位，而是针对全0或全1的极端物理情况，
-        % 直接赋予一个保守的、具有物理意义的边界值 (±2.5 * sig_th)
+        % --- 低样本回退机制 (Low-N Fallback) ---
+        % 当冻结阶段有效样本数 N_x < 8 时，概率 p 的量化步长太大，
+        % 送入 erfinv 会导致误差放大，此时退化为算术平均 (ATA模式)
         frac_est = zeros(size(p));
         
-        % 正常区间：使用概率高斯映射
-        normal_idx = (k > 0) & (k < N_x);
-        frac_est(normal_idx) = sqrt(2) * sig_th * erfinv(2 * p(normal_idx) - 1);
-        
-        % 极端区间：全0或全1，使用硬边界钳位
-        frac_est(k == 0)   = -2.5 * sig_th;  % 保守下界
-        frac_est(k == N_x) =  2.5 * sig_th;  % 保守上界
+        for idx = 1:length(p)
+            if N_x(idx) < 8
+                % 样本太少，退化为算术平均 (ATA模式)
+                % 将 0~1 映射到 -1~1 LSB
+                frac_est(idx) = p(idx) * 2 - 1;
+            else
+                % 样本充足，开启高斯概率映射
+                if k(idx) == 0
+                    frac_est(idx) = -2.5 * sig_th;  % 保守下界
+                elseif k(idx) == N_x(idx)
+                    frac_est(idx) = 2.5 * sig_th;   % 保守上界
+                else
+                    frac_est(idx) = sqrt(2) * sig_th * erfinv(2 * p(idx) - 1);
+                end
+            end
+        end
         
         % 总估计值 = 整数追踪步长 + 小数概率映射
         est(has_post) = pre_flip_sum(has_post) + frac_est;
@@ -161,6 +170,7 @@ function [est, pwr_switch, k_final, freeze_res] = run_ala(V_res, N_red, sig_th, 
     % 1. 搜索阶段：DAC 追踪残差，直到检测到翻转或 Watchdog 触发
     % 2. 冻结阶段：DAC 锁定，统计比较器输出的概率分布
     % 3. 概率映射：使用 erfinv 将概率转换为亚 LSB 精度的小数
-    % 4. 物理钳位：极端情况使用硬边界，避免频谱失真
+    % 4. 低样本回退：N_x < 8 时退化为算术平均
+    % 5. 物理钳位：极端情况使用硬边界，避免频谱失真
     % ========================================================================
 end
