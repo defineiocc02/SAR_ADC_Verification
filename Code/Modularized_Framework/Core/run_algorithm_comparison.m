@@ -23,7 +23,7 @@
 function run_algorithm_comparison()
     tic;
     fprintf('================================================================================\n');
-    fprintf('  SAR ADC 全链路动态行为级仿真平台 (JSSC风格)\n');
+    fprintf('  SAR ADC 残差算法行为比较（条件仿真）\n');
     fprintf('================================================================================\n');
     
     %% ========================================================================
@@ -43,7 +43,8 @@ function run_algorithm_comparison()
     
     cfg.N_FFT = 8192;
     cfg.N_pts = cfg.N_FFT;
-    cfg.N_MC = 20;
+    cfg.seed = 20261002;  % One reproducible noise realization; not a Monte Carlo yield.
+    rng(cfg.seed, 'twister');
     
     k_B = 1.380649e-23;
     T = 300;
@@ -84,8 +85,7 @@ function run_algorithm_comparison()
     results.sndr_fft = zeros(num_algs, num_N_red, num_sigma);
     
     base_sigma = 0.6;
-    LUT_MLE = generate_LUT_MLE(cfg.scan.N_red_range(end), base_sigma);
-    LUT_BE = generate_LUT_BE(cfg.scan.N_red_range(end), base_sigma);
+    % Each comparison count requires its own binomial likelihood table.
     
     fprintf('\n>>> [2/6] 生成相干采样正弦波输入...\n');
     N_prime = 127;
@@ -115,7 +115,7 @@ function run_algorithm_comparison()
         
         V_res_LSB = (V_res_dynamic / V_LSB) - 0.5;
         
-        [psd_raw, freq_raw] = compute_fft_psd(double(D_raw), cfg.ADC.Fs, cfg.ADC.N_bits);
+        [psd_raw, freq_raw] = compute_fft_psd(double(D_raw), cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
         sndr_raw = compute_sndr_from_psd(psd_raw, freq_raw, f_in);
         results.sndr_raw(i_sigma) = sndr_raw;
         
@@ -123,16 +123,18 @@ function run_algorithm_comparison()
         
         for i_N = 1:num_N_red
             N_red = cfg.scan.N_red_range(i_N);
+            LUT_MLE = generate_residual_lut(N_red, base_sigma, 'mle');
+            LUT_BE = generate_residual_lut(N_red, base_sigma, 'be');
             
             sigma_th_val = sigma_th;
             RW_drift = randn(cfg.N_pts, N_red) * sigma_th_val * 0.3;
             
             sig_th = sigma_th;
             
-            [est_mle, ~, ~, ~] = run_mle(V_res_LSB, N_red, sig_th, LUT_MLE(1:N_red+1), RW_drift);
+            [est_mle, ~, ~, ~] = run_mle(V_res_LSB, N_red, sig_th, LUT_MLE, RW_drift);
             D_mle = double(D_raw) + est_mle;
             
-            [est_be, ~, ~, ~] = run_be(V_res_LSB, N_red, sig_th, LUT_BE(1:N_red+1), RW_drift);
+            [est_be, ~, ~, ~] = run_be(V_res_LSB, N_red, sig_th, LUT_BE, RW_drift);
             D_be = double(D_raw) + est_be;
             
             [est_dlr, ~, ~] = run_dlr(V_res_LSB, N_red, sig_th, RW_drift);
@@ -144,31 +146,31 @@ function run_algorithm_comparison()
             [est_ala, ~, ~, ~] = run_ala(V_res_LSB, N_red, sig_th, RW_drift);
             D_ala = double(D_raw) + est_ala;
             
-            [est_htla, ~, ~, ~] = run_htla(V_res_LSB, N_red, sig_th, LUT_MLE(1:N_red+1), RW_drift);
+            [est_htla, ~, ~, ~] = run_htla(V_res_LSB, N_red, sig_th, LUT_MLE, RW_drift);
             D_htla = double(D_raw) + est_htla;
             
-            [est_adaptive, ~, ~, ~] = run_adaptive(V_res_LSB, N_red, sig_th, LUT_MLE(1:N_red+1), RW_drift);
+            [est_adaptive, ~, ~, ~] = run_adaptive(V_res_LSB, N_red, sig_th, LUT_MLE, RW_drift);
             D_adaptive = double(D_raw) + est_adaptive;
             
-            [psd_mle, ~] = compute_fft_psd(D_mle, cfg.ADC.Fs, cfg.ADC.N_bits);
+            [psd_mle, ~] = compute_fft_psd(D_mle, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
             results.sndr_fft(1, i_N, i_sigma) = compute_sndr_from_psd(psd_mle, freq_raw, f_in);
             
-            [psd_be, ~] = compute_fft_psd(D_be, cfg.ADC.Fs, cfg.ADC.N_bits);    
+            [psd_be, ~] = compute_fft_psd(D_be, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);    
             results.sndr_fft(2, i_N, i_sigma) = compute_sndr_from_psd(psd_be, freq_raw, f_in);
             
-            [psd_dlr, ~] = compute_fft_psd(D_dlr, cfg.ADC.Fs, cfg.ADC.N_bits);
+            [psd_dlr, ~] = compute_fft_psd(D_dlr, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
             results.sndr_fft(3, i_N, i_sigma) = compute_sndr_from_psd(psd_dlr, freq_raw, f_in);
             
-            [psd_ata, ~] = compute_fft_psd(D_ata, cfg.ADC.Fs, cfg.ADC.N_bits);
+            [psd_ata, ~] = compute_fft_psd(D_ata, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
             results.sndr_fft(4, i_N, i_sigma) = compute_sndr_from_psd(psd_ata, freq_raw, f_in);
             
-            [psd_ala, ~] = compute_fft_psd(D_ala, cfg.ADC.Fs, cfg.ADC.N_bits);
+            [psd_ala, ~] = compute_fft_psd(D_ala, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
             results.sndr_fft(5, i_N, i_sigma) = compute_sndr_from_psd(psd_ala, freq_raw, f_in);
             
-            [psd_htla, ~] = compute_fft_psd(D_htla, cfg.ADC.Fs, cfg.ADC.N_bits);
+            [psd_htla, ~] = compute_fft_psd(D_htla, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
             results.sndr_fft(6, i_N, i_sigma) = compute_sndr_from_psd(psd_htla, freq_raw, f_in);
             
-            [psd_adaptive, ~] = compute_fft_psd(D_adaptive, cfg.ADC.Fs, cfg.ADC.N_bits);
+            [psd_adaptive, ~] = compute_fft_psd(D_adaptive, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
             results.sndr_fft(7, i_N, i_sigma) = compute_sndr_from_psd(psd_adaptive, freq_raw, f_in);
         end
         
@@ -183,7 +185,9 @@ function run_algorithm_comparison()
     i_N_typ = find(cfg.scan.N_red_range >= 22, 1);
     
     sigma_typ = cfg.scan.sigma_range(i_sigma_typ);
-    N_red_typ = cfg.scan.N_red_range(i_N_typ);
+    N_red_typ = 22;  % The separately reported typical experiment is actually N=22.
+    LUT_MLE_typ = generate_residual_lut(N_red_typ, base_sigma, 'mle');
+    LUT_BE_typ = generate_residual_lut(N_red_typ, base_sigma, 'be');
     
     [D_raw_typ, V_res_typ] = run_dynamic_sar_quantization(V_in_noisy, cfg.ADC, sigma_typ);
     V_res_typ_LSB = (V_res_typ / V_LSB) - 0.5;
@@ -191,11 +195,11 @@ function run_algorithm_comparison()
     RW_drift_typ = randn(cfg.N_pts, N_red_typ) * sigma_typ_val * 0.3;
     
     % 公平测试所有 7 种算法
-    % 注意：截取 LUT_MLE(1:N_red_typ+1) 传递对应长度的查找表，并补齐 RW_drift_typ 参数
-    [est_mle_typ, ~, ~, ~] = run_mle(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_MLE(1:N_red_typ+1), RW_drift_typ);
+    % Typical tables use the actual comparison count; slicing a longer table is invalid.
+    [est_mle_typ, ~, ~, ~] = run_mle(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_MLE_typ, RW_drift_typ);
     D_mle_typ = double(D_raw_typ) + est_mle_typ;
     
-    [est_be_typ, ~, ~, ~] = run_be(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_BE(1:N_red_typ+1), RW_drift_typ);
+    [est_be_typ, ~, ~, ~] = run_be(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_BE_typ, RW_drift_typ);
     D_be_typ = double(D_raw_typ) + est_be_typ;
     
     [est_dlr_typ, ~, ~] = run_dlr(V_res_typ_LSB, N_red_typ, sigma_typ, RW_drift_typ);
@@ -208,24 +212,24 @@ function run_algorithm_comparison()
     D_ala_typ = double(D_raw_typ) + est_ala_typ;
     
     % 注意：为 HT-LA 和 Adaptive 传入正确的查找表
-    [est_htla_typ, ~, ~, ~] = run_htla(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_MLE(1:N_red_typ+1), RW_drift_typ);
+    [est_htla_typ, ~, ~, ~] = run_htla(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_MLE_typ, RW_drift_typ);
     D_htla_typ = double(D_raw_typ) + est_htla_typ;
     
-    [est_adaptive_typ, ~, ~, ~] = run_adaptive(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_MLE(1:N_red_typ+1), RW_drift_typ);
+    [est_adaptive_typ, ~, ~, ~] = run_adaptive(V_res_typ_LSB, N_red_typ, sigma_typ, LUT_MLE_typ, RW_drift_typ);
     D_adaptive_typ = double(D_raw_typ) + est_adaptive_typ;
     
     % 计算所有算法的 FFT
-    [psd_raw_typ, freq_typ] = compute_fft_psd(double(D_raw_typ), cfg.ADC.Fs, cfg.ADC.N_bits);
-    [psd_mle_typ, ~] = compute_fft_psd(D_mle_typ, cfg.ADC.Fs, cfg.ADC.N_bits);
-    [psd_be_typ, ~] = compute_fft_psd(D_be_typ, cfg.ADC.Fs, cfg.ADC.N_bits);
-    [psd_dlr_typ, ~] = compute_fft_psd(D_dlr_typ, cfg.ADC.Fs, cfg.ADC.N_bits);
-    [psd_ata_typ, ~] = compute_fft_psd(D_ata_typ, cfg.ADC.Fs, cfg.ADC.N_bits);
-    [psd_ala_typ, ~] = compute_fft_psd(D_ala_typ, cfg.ADC.Fs, cfg.ADC.N_bits);
-    [psd_htla_typ, ~] = compute_fft_psd(D_htla_typ, cfg.ADC.Fs, cfg.ADC.N_bits);
-    [psd_adaptive_typ, ~] = compute_fft_psd(D_adaptive_typ, cfg.ADC.Fs, cfg.ADC.N_bits);
+    [psd_raw_typ, freq_typ] = compute_fft_psd(double(D_raw_typ), cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
+    [psd_mle_typ, ~] = compute_fft_psd(D_mle_typ, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
+    [psd_be_typ, ~] = compute_fft_psd(D_be_typ, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
+    [psd_dlr_typ, ~] = compute_fft_psd(D_dlr_typ, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
+    [psd_ata_typ, ~] = compute_fft_psd(D_ata_typ, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
+    [psd_ala_typ, ~] = compute_fft_psd(D_ala_typ, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
+    [psd_htla_typ, ~] = compute_fft_psd(D_htla_typ, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
+    [psd_adaptive_typ, ~] = compute_fft_psd(D_adaptive_typ, cfg.ADC.Fs, cfg.ADC.N_bits, f_in);
     
     % 计算所有算法的 SNDR
-    sndr_raw_typ = results.sndr_raw(i_sigma_typ);
+    sndr_raw_typ = compute_sndr_from_psd(psd_raw_typ, freq_typ, f_in);
     sndr_mle_typ = compute_sndr_from_psd(psd_mle_typ, freq_typ, f_in);
     sndr_be_typ = compute_sndr_from_psd(psd_be_typ, freq_typ, f_in);
     sndr_dlr_typ = compute_sndr_from_psd(psd_dlr_typ, freq_typ, f_in);
@@ -449,11 +453,12 @@ function run_algorithm_comparison()
     fprintf(fid, '  ADC分辨率: %d-bit\n', cfg.ADC.N_bits);
     fprintf(fid, '  采样频率: %.2f MHz\n', cfg.ADC.Fs/1e6);
     fprintf(fid, '  FFT点数: %d\n', cfg.N_FFT);
+    fprintf(fid, '  随机种子: %d；单次噪声实现，不是良率统计\n', cfg.seed);
     fprintf(fid, '  输入频率: %.2f Hz (相干采样 N_prime=%d)\n', f_in, N_prime);
     fprintf(fid, '  kT/C噪声: %.3f LSB\n', kTC_LSB);
     fprintf(fid, '  Thermal Limit: %.1f dB\n\n', SNDR_Thermal_Limit);
     
-    fprintf(fid, '【PVT鲁棒性测试 - LUT错位分析】\n');
+    fprintf(fid, '【噪声敏感度分析（不等同工艺、电压、温度验证）】\n');
     fprintf(fid, '  LUT基准噪声: %.2f LSB\n', base_sigma);
     fprintf(fid, '  仿真噪声范围: %.2f - %.2f LSB\n\n', cfg.scan.sigma_range(1), cfg.scan.sigma_range(end));
     
@@ -553,77 +558,26 @@ end
 %% ========================================================================
 % 辅助函数: FFT功率谱密度计算 (dBFS归一化)
 %% ========================================================================
-function [psd_dBFS, freq] = compute_fft_psd(signal, Fs, N_bits)
-    N = length(signal);
-    
-    signal = signal - mean(signal);
-    
-    fft_result = fft(signal, N);
-    
-    mag = abs(fft_result) / (N/2);
-    mag(1) = mag(1) / 2;
-    
-    A_FS = 2^(N_bits-1);
-    psd_dBFS = 20 * log10(mag(1:N/2+1) / A_FS + eps);
-    
-    freq = (0:N/2) * Fs / N;
+function [psd_dBFS, freq] = compute_fft_psd(signal, Fs, N_bits, Fin)
+    [freq, psd_dBFS] = adc_spectrum(signal, Fs, 2^(N_bits-1), Fin, 'rectangular');
 end
 
-%% ========================================================================
-% 辅助函数: 从PSD计算SNDR
-%% ========================================================================
 function sndr = compute_sndr_from_psd(psd_dBFS, freq, f_signal)
-    psd_linear = 10.^(psd_dBFS / 10);
-    
-    [~, idx_fund] = min(abs(freq - f_signal));
-    
-    fund_bin_width = 2;
-    fund_bins = max(1, idx_fund-fund_bin_width):min(length(psd_linear), idx_fund+fund_bin_width);
-    fund_power = sum(psd_linear(fund_bins));
-    
-    total_power = sum(psd_linear);
-    noise_power = total_power - fund_power;
-    
-    if noise_power > 0
-        sndr = 10 * log10(fund_power / noise_power);
+    % Coherent rectangular spectrum: retain every non-DC, non-fundamental bin.
+    power = 10.^(psd_dBFS / 10);
+    [distance, fundamental] = min(abs(freq - f_signal));
+    if distance > (freq(2)-freq(1))*1e-7
+        error('ADC:Noncoherent', 'Rectangular SNDR requires a coherent tone.');
+    end
+    noise_mask = true(size(power));
+    noise_mask([1 fundamental]) = false;
+    signal_power = power(fundamental);
+    noise_power = sum(power(noise_mask));
+    if signal_power <= 0
+        sndr = NaN;
+    elseif noise_power == 0
+        sndr = Inf;
     else
-        sndr = 100;
-    end
-    
-    sndr = min(sndr, 120);
-end
-
-%% ========================================================================
-% 辅助函数: 生成MLE查找表
-%% ========================================================================
-function LUT = generate_LUT_MLE(N_red, sigma)
-    LUT = zeros(1, N_red + 1);
-    for k = 0:N_red
-        if k > 0 && k < N_red
-            LUT(k+1) = sqrt(2) * sigma * erfinv(2*k/N_red - 1);
-        else
-            LUT(k+1) = 2.5 * sign(k - 0.5);
-        end
-    end
-end
-
-%% ========================================================================
-% 辅助函数: 生成BE查找表
-%% ========================================================================
-function LUT = generate_LUT_BE(N_red, sigma)
-    v_grid = linspace(-10*sigma, 10*sigma, 5000);
-    dv = v_grid(2) - v_grid(1);
-    prior = exp(-0.5 * (v_grid / sigma).^2);
-    LUT = zeros(1, N_red + 1);
-    
-    for k = 0:N_red
-        p_v = 0.5 * (1 + erf(v_grid / (sqrt(2) * sigma)));
-        likelihood = (p_v.^k) .* ((1 - p_v).^(N_red - k));
-        posterior = likelihood .* prior;
-        if sum(posterior) > 1e-100
-            LUT(k+1) = sum(v_grid .* posterior .* dv) / sum(posterior .* dv);
-        else
-            LUT(k+1) = generate_LUT_MLE(N_red, sigma);
-        end
+        sndr = 10*log10(signal_power/noise_power);
     end
 end
