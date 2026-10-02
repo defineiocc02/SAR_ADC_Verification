@@ -1,0 +1,16 @@
+name: Numerical contracts
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  numeric:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Octave
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave
+      - name: Exercise numerical contracts and historical counterexamples
+        run: octave --no-gui --quiet --eval "addpath('tests'); run_numeric_tests"

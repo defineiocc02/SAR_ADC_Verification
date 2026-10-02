@@ -32,45 +32,11 @@ res_false_lock_ht  = zeros(1, num_offsets);
 
 % 准备 LUT
 % MLE 查找表
-LUT_MLE = zeros(1, cfg.ADC.N_red + 1);
-for k = 0:cfg.ADC.N_red
-    if k > 0 && k < cfg.ADC.N_red
-        LUT_MLE(k+1) = sqrt(2) * cfg.base_sigma_n * erfinv(2*k/cfg.ADC.N_red - 1);
-    else
-        LUT_MLE(k+1) = 2.5 * sign(k - 0.5);
-    end
-end
+% Consumers expect a one-dimensional full residual table, not a 2-D correction.
+LUT_MLE = generate_residual_lut(cfg.ADC.N_red, cfg.base_sigma_n, 'mle');
+LUT_BE = generate_residual_lut(cfg.ADC.N_red, cfg.base_sigma_n, 'be');
+LUT_HTLA = LUT_MLE;
 
-% BE 查找表
-v_grid = linspace(-10*cfg.base_sigma_n, 10*cfg.base_sigma_n, 5000);
-dv = v_grid(2) - v_grid(1);
-prior = exp(-0.5 * (v_grid / cfg.base_sigma_n).^2);
-LUT_BE = zeros(1, cfg.ADC.N_red + 1);
-for k = 0:cfg.ADC.N_red
-    p_v = 0.5 * (1 + erf(v_grid / (sqrt(2) * cfg.base_sigma_n)));
-    likelihood = (p_v.^k) .* ((1 - p_v).^(cfg.ADC.N_red - k));
-    posterior = likelihood .* prior;
-    if sum(posterior) > 1e-100
-        LUT_BE(k+1) = sum(v_grid .* posterior .* dv) / sum(posterior .* dv);
-    else
-        LUT_BE(k+1) = LUT_MLE(k+1);
-    end
-end
-
-% HT-LA 微表
-LUT_HTLA = zeros(cfg.ADC.N_red, cfg.ADC.N_red + 1);
-for n_avg = 1:cfg.ADC.N_red
-    for k = 0:n_avg
-        y_val = (2*k - n_avg) / n_avg;
-        y_safe = max(min(y_val, 1-1e-15), -1+1e-15);
-        exact_full = sqrt(2) * cfg.base_sigma_n * erfinv(y_safe);
-        linear_base = sqrt(pi/2) * cfg.base_sigma_n * y_val;
-        delta_y = exact_full - linear_base;
-        LUT_HTLA(n_avg, k+1) = round(max(min(delta_y, 0.5), -0.5) * 64) / 64;
-    end
-end
-
-% 预生成确定性微观下垂
 micro_drift_base = cfg.Drift.V_droop_max * exp(-(1:cfg.ADC.N_red) / cfg.Drift.tau_recover);
 micro_drift_matrix = repmat(micro_drift_base, N_pts, 1);
 
