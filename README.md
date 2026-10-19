@@ -1,6 +1,6 @@
 # SAR_ADC_Verification
 
-![状态](https://img.shields.io/badge/%E7%8A%B6%E6%80%81-%E5%8E%9F%E5%9E%8B%E9%AA%8C%E8%AF%81-0969da?style=flat-square) ![类型](https://img.shields.io/badge/%E7%B1%BB%E5%9E%8B-%E6%95%B0%E5%80%BC%E9%AA%8C%E8%AF%81-6e7781?style=flat-square) ![技术栈](https://img.shields.io/badge/%E6%8A%80%E6%9C%AF%E6%A0%88-MATLAB-6e7781?style=flat-square) ![许可](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF-%E6%9C%AA%E6%8C%87%E5%AE%9A-6e7781?style=flat-square)
+![状态](https://img.shields.io/badge/%E7%8A%B6%E6%80%81-%E5%8E%9F%E5%9E%8B%E9%AA%8C%E8%AF%81-0969da?style=flat-square) ![类型](https://img.shields.io/badge/%E7%B1%BB%E5%9E%8B-%E6%95%B0%E5%80%BC%E9%AA%8C%E8%AF%81-6e7781?style=flat-square) ![技术栈](https://img.shields.io/badge/%E6%8A%80%E6%9C%AF%E6%A0%88-MATLAB-6e7781?style=flat-square) ![许可](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF-%E6%9C%AA%E6%8C%87%E5%AE%9A-6e7781?style=flat-square) [![Numerical contracts](https://github.com/defineiocc02/SAR_ADC_Verification/actions/workflows/numeric-validation.yml/badge.svg)](https://github.com/defineiocc02/SAR_ADC_Verification/actions/workflows/numeric-validation.yml)
 
 > 16-bit SAR ADC 冗余残差估计算法的 MATLAB 行为级数值验证与对比。
 
