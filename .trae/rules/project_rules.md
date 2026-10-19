@@ -7,32 +7,46 @@ description:
 ## ⚠️ 三大铁律 (必须遵守!)
 
 1. **所有输出必须到 `Results/` 目录** - 严禁在其他位置创建文件!
-2. **只运行 `Code/Core/` 中的脚本** - Modules 是函数库，不要直接运行!
+2. **只运行 `Code/Modularized_Framework/Core/` 中的脚本** - `Code/Modules/` 是函数库，不要直接运行!
 3. **保持随机种子 2026, N_MC≥30** - 确保结果可复现和统计意义!
 
 ## 📁 路径结构
 
 ```
 SAR_ADC_Verification/
-├── Code/Core/           # 仅此目录可运行
-│   ├── Integrated_SAR_ADC_Verification.m  # 完整验证
-│   └── Clean_Baseline_Verification.m      # 纯净环境
-├── Results/             # 所有输出到这里
-│   ├── Figures_Full/    # 11 张 PDF (完整)
-│   ├── Figures_Clean/   # 2 张 PDF (纯净)
-│   └── Reports/         # TXT 报告
-└── References/          # 只读 PDF
+├── Code/
+│   ├── Modularized_Framework/Core/  # 仅此目录可运行 (当前入口)
+│   │   ├── main.m                   # 主运行脚本 (入口)
+│   │   ├── config.m                 # 全局配置
+│   │   ├── run_algorithm_comparison.m    # 多维度对比
+│   │   ├── run_false_freezing_analysis.m # 假死率分析
+│   │   ├── run_monte_carlo.m        # 蒙特卡洛仿真
+│   │   ├── run_main_sar.m           # SAR 量化引擎
+│   │   ├── calc_fft.m               # FFT 分析
+│   │   ├── generate_figures.m       # 图表生成
+│   │   ├── generate_report.m        # 报告生成
+│   │   └── algorithms/              # 7 种残差估计算法
+│   └── Modules/                     # 函数库 (不直接运行)
+├── Results/                         # 所有输出到这里
+│   ├── Fig_*.png / Fig_*.eps        # 图表
+│   ├── Report_*.txt                 # TXT 报告
+│   └── Data_*.mat                   # 数据
+├── archive/
+│   ├── old_core/                    # 已归档: Integrated_SAR_ADC_Verification.m、Clean_Baseline_Verification.m (勿运行)
+│   └── old_results/                 # 已归档: 历史图表与报告
+└── References/                      # 只读 PDF
 ```
+
+> 注: 旧脚本 `Integrated_SAR_ADC_Verification.m` / `Clean_Baseline_Verification.m` 已归档至 `archive/old_core/`，现行流程使用 `Code/Modularized_Framework/Core/main.m`。
 
 ## 🚀 标准操作流程
 
 ```matlab
-% 步骤 1: 切换到 Core 目录
-cd('c:\Users\Administrator\Desktop\SAR_ADC_Verification\Code\Core')
+% 步骤 1: 切换到 Core 目录 (仓库根目录下)
+cd('Code/Modularized_Framework/Core')
 
-% 步骤 2: 运行脚本 (二选一)
-run Integrated_SAR_ADC_Verification.m  % 完整验证 (推荐)
-run Clean_Baseline_Verification.m      % 纯净环境
+% 步骤 2: 运行主入口 (RUN_MODE 见 Core/README.md)
+main
 ```
 
 ## 🔧 修改代码前 5 步思考
@@ -48,16 +62,16 @@ run Clean_Baseline_Verification.m      % 纯净环境
 - **命名**: `ADC.N_main`, `SS.Cs` (结构体 + 字段)
 - **注释**: 中文 + 英文术语
 - **调色板**: `COLOR.mle=[0.20,0.40,0.80]`, `COLOR.htla=[0.85,0.15,0.15]`
-- **图表**: Times New Roman 字体，线宽 2.0，保存到 `Results/Figures_*/`
+- **图表**: Times New Roman 字体，线宽 2.0，保存到仓库根目录 `Results/`
 
 ## ⚠️ 常见错误
 
 | 错误 | 后果 | 避免 |
 |------|------|------|
-| 错误目录运行 | 文件丢失 | 始终从 Core/ 运行 |
+| 错误目录运行 | 文件丢失 | 始终从 `Code/Modularized_Framework/Core/` 运行 |
 | 改随机种子 | 不可复现 | 保持 seed=2026 |
 | N_MC<30 | 统计不足 | 出图必须≥30 |
-| 运行 Modules | 报错 | 只运行 Core/ 脚本 |
+| 运行 Modules / archive 旧脚本 | 报错或产出过期结果 | 只运行 `Core/` 脚本 |
 
 ## ✅ 提交前检查清单
 
@@ -76,4 +90,4 @@ run Clean_Baseline_Verification.m      % 纯净环境
 4. 检查 Results/ 输出
 
 ---
-**更新**: 2026-03-01 | **维护**: SAR ADC 团队
+**更新**: 2026-10-19 | **维护**: SAR ADC 团队

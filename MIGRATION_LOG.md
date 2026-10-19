@@ -16,7 +16,7 @@
 |------|------|
 | **远程仓库** | https://github.com/defineiocc02/SAR_ADC_Verification.git |
 | **迁移前提交** | 4eabe8e |
-| **分支** | master |
+| **分支** | main（迁移当时为 master；默认分支后续统一更名为 main，脚本与 CI 均不依赖分支名） |
 | **标签** | v5.0.0 |
 
 ## 迁移步骤
