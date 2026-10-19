@@ -1,8 +1,8 @@
 # SAR_ADC_Verification
 
-> 16-bit SAR ADC 冗余残差估计算法的 MATLAB 行为级数值验证与对比。
+![状态](https://img.shields.io/badge/%E7%8A%B6%E6%80%81-%E5%8E%9F%E5%9E%8B%E9%AA%8C%E8%AF%81-0969da?style=flat-square) ![类型](https://img.shields.io/badge/%E7%B1%BB%E5%9E%8B-%E6%95%B0%E5%80%BC%E9%AA%8C%E8%AF%81-6e7781?style=flat-square) ![技术栈](https://img.shields.io/badge/%E6%8A%80%E6%9C%AF%E6%A0%88-MATLAB-6e7781?style=flat-square) ![许可](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF-%E6%9C%AA%E6%8C%87%E5%AE%9A-6e7781?style=flat-square)
 
-[![Numerical contracts](https://github.com/defineiocc02/SAR_ADC_Verification/actions/workflows/numeric-validation.yml/badge.svg)](https://github.com/defineiocc02/SAR_ADC_Verification/actions/workflows/numeric-validation.yml)
+> 16-bit SAR ADC 冗余残差估计算法的 MATLAB 行为级数值验证与对比。
 
 ## 这是什么
 
@@ -77,7 +77,7 @@ archive/                                  旧核心脚本与旧结果，不参�
 References/                               4 篇参考论文 PDF
 ```
 
-## 指标口径
+## 设计与用法
 
 **前置条件（所有频谱量）**：记录必须是长度 ≥ 16 的有限实数序列，否则 `ADC:InvalidRecord`；`fs`、满量程峰值、`f_in` 必须为正标量且 `f_in < fs/2`。FFT 前先减去均值，因此直流只从记录中移除，不是在功率里扣除。单边谱取 `floor(N/2)+1` 个 bin，偶长度只对 `2..end-1` 翻倍，**Nyquist bin 不翻倍**。窗能量归一化后 `density = |X|²/(fs·Σw²)`，`bin_power = density·fs/N`，参考功率取 `full_scale_peak²/2`（满量程正弦的 RMS 功率），因此纵轴单位是 **dBFS/bin**，不是密度；密度单位是输入单位的平方每赫兹。实现见 [adc_spectrum.m](Code/Modularized_Framework/Core/adc_spectrum.m)，不做 100/120 dB 之类的人为饱和。
 
@@ -103,6 +103,10 @@ References/                               4 篇参考论文 PDF
 - 比较脚本中漂移项对估计器可见，属于 oracle 条件；Adaptive 也使用了输入噪声参数选择策略，不能宣称完全无需先验。
 - SFDR 只存在于独立脚本，口径与 Core 的 dBFS/bin 不同，且未被 CI 保护，容易随重构失效。
 - `RUN_MODE=1` 的完整框架输出到 `ModularResults/`，该目录未跟踪、近期无运行记录，可用性未验证。
+
+## 相关仓库
+
+暂无直接关联的仓库。
 
 ## 许可
 
